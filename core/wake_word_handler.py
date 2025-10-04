@@ -75,7 +75,12 @@ def wake_word_listener(wake_event_queue, access_key, model_path):
         
         # Set up PyAudio
         pa = pyaudio.PyAudio()
+        device_index = 0
+        system = platform.system().lower()
+        if system == "windows":
+            device_index = 2
         audio_stream = pa.open(
+            input_device_index=device_index,
             rate=porcupine.sample_rate,
             channels=1,
             format=pyaudio.paInt16,

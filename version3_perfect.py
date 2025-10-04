@@ -1,11 +1,95 @@
-from core.gemini_handler import query_gemini, parse_steps
-from core.voice_handler import record_audio, transcribe_audio_with_eleven, speak_with_eleven
-from core.screenshot_handler import take_screenshot
-from core.wake_word_handler import WakeWordDetector
-import customtkinter as ctk
 import os
-import platform
-import threading
+import sys
+import time
+import tkinter as tk
+from tkinter import messagebox
+import customtkinter as ctk
+import pyautogui
+import google.generativeai as genai
+from PIL import Image, ImageDraw, ImageTk
+import io
+
+from dotenv import load_dotenv
+
+ctk.set_appearance_mode("dark")
+ctk.set_default_color_theme("blue")
+
+load_dotenv()
+
+def configure_gemini():
+    """Configure Gemini API with error handling."""
+    api_key = os.environ.get("GEMINI_API_KEY")
+    if not api_key:
+        messagebox.showerror(
+            "API Key Missing",
+            "GEMINI_API_KEY environment variable not set!\n\n"
+            "Please set it with:\nexport GEMINI_API_KEY='your-api-key'"
+        )
+        sys.exit(1)
+    genai.configure(api_key=api_key)
+
+
+def take_screenshot(window):
+    """Take a screenshot after hiding the window."""
+    try:
+        window.withdraw()
+        time.sleep(0.3)
+        screenshot = pyautogui.screenshot()
+        window.deiconify()
+        return screenshot
+    except Exception as e:
+        window.deiconify()
+        print(f"Screenshot error: {e}")
+        return None
+
+
+def query_gemini(user_instruction, screenshot_image):
+    """Query Gemini with screenshot and instruction."""
+    try:
+        prompt = f"""You are an assistant helping elderly or non-technical users navigate their computer.
+
+Context:
+- The user provides a screenshot of their screen
+- The user's request: "{user_instruction}"
+
+Task:
+- Break the solution into simple, numbered steps (1., 2., 3., etc.)
+- Keep each step short and crystal clear
+- Describe clickable items by color, text, or icon
+- End with: "Did that work?"
+"""
+        model = genai.GenerativeModel("models/gemini-2.0-flash-exp")
+
+        # Convert PIL image to bytes
+        img_byte_arr = io.BytesIO()
+        screenshot_image.save(img_byte_arr, format='PNG')
+        img_byte_arr = img_byte_arr.getvalue()
+
+        response = model.generate_content([
+            prompt,
+            {"mime_type": "image/png", "data": img_byte_arr}
+        ])
+
+        return response.text.strip()
+    except Exception as e:
+        return f"Error: {str(e)}"
+
+
+def parse_steps(response_text):
+    """Extract numbered steps from response."""
+    steps = []
+    for line in response_text.splitlines():
+        stripped = line.strip()
+        if stripped and len(stripped) > 2:
+            # Check if line starts with a number followed by period or parenthesis
+            if stripped[0].isdigit() and stripped[1] in ['.', ')', ':']:
+                steps.append(stripped)
+
+    if not steps:
+        steps = [response_text]
+
+    return steps
+
 
 class NaviAssistant(ctk.CTk):
     def __init__(self):
@@ -29,13 +113,6 @@ class NaviAssistant(ctk.CTk):
 
         self.bind("<Button-1>", self.start_drag)
         self.bind("<B1-Motion>", self.on_drag)
-        
-        # Initialize wake word detection
-        self.wake_word_detector = None
-        self.start_wake_word_detection()
-        
-        # Start checking for wake word events
-        self.check_wake_word_queue()
 
     def position_window(self, size):
         """Position window in bottom-right corner using given size tuple (w, h)."""
@@ -57,89 +134,46 @@ class NaviAssistant(ctk.CTk):
         x = self.winfo_x() + event.x - self.drag_x
         y = self.winfo_y() + event.y - self.drag_y
         self.geometry(f"+{x}+{y}")
-    
-    def start_wake_word_detection(self):
-        """Start the wake word detection in a background thread."""
-        try:
-            # Get Picovoice access key from environment
-            access_key = os.environ.get("PICOVOICE_ACCESS_KEY")
-            if not access_key:
-                print("⚠️ PICOVOICE_ACCESS_KEY not found in environment.")
-                print("Wake word detection disabled. Set the key in your .env file.")
-                return
-            
-            # Create and start the wake word detector
-            self.wake_word_detector = WakeWordDetector(access_key)
-            success = self.wake_word_detector.start()
-            
-            if not success:
-                self.wake_word_detector = None
-                
-        except Exception as e:
-            print(f"❌ Failed to initialize wake word detection: {e}")
-            self.wake_word_detector = None
-    
-    def check_wake_word_queue(self):
-        """Periodically check if wake word was detected and trigger expand."""
-        if self.wake_word_detector is not None:
-            if self.wake_word_detector.check_for_wake_word():
-                print("🎯 Activating assistant from wake word...")
-                self.expand()
-                self.voice_input()
-
-        
-        # Check again in 100ms (10 times per second)
-        self.after(100, self.check_wake_word_queue)
 
     def create_collapsed_ui(self):
         """Create the collapsed floating button."""
         self.collapsed_frame = ctk.CTkFrame(
             self,
-            fg_color=("#667eea", "#764ba2"),  # a clean purple
-            corner_radius=32,
+            fg_color=("#667eea", "#764ba2"),
+            corner_radius=28,
             border_width=0
         )
         self.collapsed_frame.pack(fill="both", expand=True, padx=0, pady=0)
 
         button_content = ctk.CTkFrame(
             self.collapsed_frame,
-            fg_color="transparent"
+            fg_color="transparent",
+            corner_radius=0
         )
-        button_content.pack(fill="both", expand=True, padx=20, pady=10)
+        button_content.pack(fill="both", expand=True, padx=16, pady=12)
+
+        icon_label = ctk.CTkLabel(
+            button_content,
+            text="✨",
+            font=("Arial", 20),
+            text_color="white"
+        )
+        icon_label.pack(side="left", padx=(0, 8))
 
         text_label = ctk.CTkLabel(
             button_content,
-            text="ASK NAVI",
-            font=("Arial", 15, "bold"),
-            text_color="white"
+            text="NAVIGATE",
+            font=("Arial", 14, "bold"),
+            text_color="white",
+            justify="center"
         )
-        text_label.pack()
+        text_label.pack(side="left")
+        self.attributes("-transparentcolor", self.cget("fg_color"))
 
-        # Configure appearance with cross-platform compatibility
-        self.collapsed_frame.configure(fg_color="#7C3AED")
-        
-        # Apply platform-specific transparency
-        if platform.system() == "Windows":
-            # Windows supports transparentcolor
-            self.attributes("-transparentcolor", self.cget("fg_color"))
-            self.configure(bg="#000000")
-        
-        # Alpha transparency works on both macOS and Windows
-        self.attributes("-alpha", 0.96)
-
-        # Hover effect: lighten color slightly
-        def on_hover(e):
-            self.collapsed_frame.configure(fg_color="#8B5CF6")
-
-        def on_leave(e):
-            self.collapsed_frame.configure(fg_color="#7C3AED")
-
-        self.collapsed_frame.bind("<Enter>", on_hover)
-        self.collapsed_frame.bind("<Leave>", on_leave)
-
-        # Make entire frame clickable
-        for widget in (self.collapsed_frame, button_content, text_label):
-            widget.bind("<Button-1>", lambda e: self.expand())
+        self.collapsed_frame.bind("<Button-1>", lambda e: self.expand())
+        button_content.bind("<Button-1>", lambda e: self.expand())
+        icon_label.bind("<Button-1>", lambda e: self.expand())
+        text_label.bind("<Button-1>", lambda e: self.expand())
 
     def expand(self):
         """Expand to full panel."""
@@ -177,86 +211,71 @@ class NaviAssistant(ctk.CTk):
         )
         self.expanded_frame.pack(fill="both", expand=True)
 
-        # --- Header Bar (for collapse button) ---
-        header_frame = ctk.CTkFrame(
+        header = ctk.CTkFrame(
             self.expanded_frame,
-            fg_color="#f3f4f6",
-            corner_radius=20,
-            height=40
+            fg_color=("#667eea", "#764ba2"),
+            corner_radius=0,
+            height=80
         )
-        header_frame.pack(fill="x", padx=10, pady=(10, 0))
-        header_frame.pack_propagate(False)
+        header.pack(fill="x", padx=0, pady=0)
+        header.pack_propagate(False)
 
-        # Small "×" close button on the right
+        header_content = ctk.CTkFrame(header, fg_color="transparent")
+        header_content.pack(fill="both", expand=True, padx=20, pady=16)
+
+        title_frame = ctk.CTkFrame(header_content, fg_color="transparent")
+        title_frame.pack(side="left", fill="y")
+
+        title = ctk.CTkLabel(
+            title_frame,
+            text="AI Assistant",
+            font=("Arial", 20, "bold"),
+            text_color="white"
+        )
+        title.pack(anchor="w")
+
+        subtitle = ctk.CTkLabel(
+            title_frame,
+            text="Get step-by-step help",
+            font=("Arial", 12),
+            text_color="white"
+        )
+        subtitle.pack(anchor="w")
+
         close_btn = ctk.CTkButton(
-            header_frame,
+            header_content,
             text="×",
-            width=30,
-            height=30,
-            corner_radius=15,
-            fg_color="#e5e7eb",
-            hover_color="#d1d5db",
-            text_color="black",
-            font=("Arial", 18, "bold"),
+            width=36,
+            height=36,
+            corner_radius=18,
+            fg_color="white",
+            hover_color="black",
+            font=("Arial", 24),
             command=self.collapse
         )
-        close_btn.pack(side="right", padx=(0, 5), pady=5)
+        close_btn.pack(side="right")
 
-        # Optional: Title text on the left for symmetry
-        title_label = ctk.CTkLabel(
-            header_frame,
-            text="Navi Assistant",
-            font=("Arial", 14, "bold"),
-            text_color="#374151"
-        )
-        title_label.pack(side="left", padx=10)
-
-        # --- Main content container ---
         content = ctk.CTkFrame(
             self.expanded_frame,
             fg_color="transparent"
         )
         content.pack(fill="both", expand=True, padx=20, pady=20)
 
-        # --- Input Section (entry + mic button side-by-side) ---
-        input_frame = ctk.CTkFrame(
-            content,
-            fg_color="transparent"
-        )
-        input_frame.pack(fill="x", pady=(0, 12))
-
-        # Black input box
         self.input_entry = ctk.CTkEntry(
-            input_frame,
+            content,
             placeholder_text="What do you need help with?",
             height=44,
             corner_radius=12,
-            border_width=0,
-            fg_color="#1f2937",
-            text_color="white",
+            border_width=2,
+            border_color="#e5e7eb",
             font=("Arial", 14)
         )
-        self.input_entry.pack(side="left", fill="x", expand=True, padx=(0, 8))
+        self.input_entry.pack(fill="x", pady=(0, 12))
         self.input_entry.bind("<Return>", lambda e: self.process_command())
 
-        # Microphone button (on right end of entry)
-        self.voice_btn = ctk.CTkButton(
-            input_frame,
-            text="🎤",
-            width=44,
-            height=44,
-            corner_radius=12,
-            fg_color="#10b981",
-            hover_color="#059669",
-            font=("Arial", 20, "bold"),
-            command=self.voice_input
-        )
-        self.voice_btn.pack(side="right")
-
-        # Long purple "Type Help" button
         self.submit_btn = ctk.CTkButton(
             content,
-            text="Ask Navi",
+            text="Get Help",
             height=44,
             corner_radius=12,
             fg_color=("#667eea", "#764ba2"),
@@ -266,7 +285,6 @@ class NaviAssistant(ctk.CTk):
         )
         self.submit_btn.pack(fill="x", pady=(0, 16))
 
-        # --- Output Area ---
         self.output_frame = ctk.CTkFrame(
             content,
             fg_color="white",
@@ -287,13 +305,12 @@ class NaviAssistant(ctk.CTk):
         self.output_text.insert("1.0", "Enter a question above to get started...")
         self.output_text.configure(state="disabled")
 
-        # --- Yes/No Buttons ---
         button_frame = ctk.CTkFrame(content, fg_color="transparent")
         button_frame.pack(fill="x")
 
         self.yes_btn = ctk.CTkButton(
             button_frame,
-            text="Yes, Next Step",
+            text="✓ Yes, Next Step",
             height=44,
             corner_radius=12,
             fg_color="#10b981",
@@ -306,7 +323,7 @@ class NaviAssistant(ctk.CTk):
 
         self.no_btn = ctk.CTkButton(
             button_frame,
-            text="No, Clarify",
+            text="✗ No, Clarify",
             height=44,
             corner_radius=12,
             fg_color="#ef4444",
@@ -369,11 +386,8 @@ class NaviAssistant(ctk.CTk):
             step_text += f"\n\n{follow_up}"
 
             self.update_output(step_text, "#374151")
-
             self.yes_btn.configure(state="normal")
             self.no_btn.configure(state="normal")
-            # Speak asynchronously (no UI delay)
-            threading.Thread(target=speak_with_eleven, args=(current,), daemon=True).start()
         else:
             self.update_output(
                 "🎉 All steps completed!\n\nGreat job! You can now close this window or ask for more help.",
@@ -421,8 +435,6 @@ Task:
         clarification_text += "\n\nTry again — did that help?"
 
         self.update_output(clarification_text, "#374151")
-        # Speak asynchronously (no UI delay)
-        threading.Thread(target=speak_with_eleven, args=(clarification), daemon=True).start()
         self.yes_btn.configure(state="normal")
         self.no_btn.configure(state="normal")
 
@@ -433,22 +445,8 @@ Task:
         self.output_text.insert("1.0", text.replace("**",""))
         self.output_text.configure(state="disabled")
 
-    def voice_input(self):
-        """Capture voice and process as text command."""
-        try:
-            self.update_output("🎙️ Listening...", "#667eea")
-            self.update()
 
-            audio_data = record_audio(duration=5)  # adjust time if needed
-            text = transcribe_audio_with_eleven(audio_data)
-
-            if text:
-                self.update_output(f"You said: “{text}”", "#374151")
-                self.input_entry.delete(0, "end")
-                self.input_entry.insert(0, text)
-                self.process_command()
-            else:
-                self.update_output("❌ Couldn't recognize speech.", "#ef4444")
-
-        except Exception as e:
-            self.update_output(f"Error recording: {e}", "#ef4444")
+if __name__ == "__main__":
+    configure_gemini()
+    app = NaviAssistant()
+    app.mainloop()
