@@ -1,3 +1,5 @@
+from PIL import ImageTk, Image
+
 from core.gemini_handler import query_gemini, parse_steps
 from core.voice_handler import record_audio, transcribe_audio_with_eleven, speak_with_eleven, stop_speech
 from core.screenshot_handler import take_screenshot
@@ -153,6 +155,7 @@ class NaviAssistant(ctk.CTk):
 
     def collapse(self):
         """Collapse to floating button."""
+        stop_speech()
         if not self.is_expanded:
             return
 
@@ -237,9 +240,14 @@ class NaviAssistant(ctk.CTk):
         self.input_entry.bind("<Return>", lambda e: self.process_command())
 
         # Microphone button (on right end of entry)
-        self.voice_btn = ctk.CTkButton(
+        # --- Fancy Mic Button ---
+        mic_image = Image.open("assets/Image.png").resize((33, 33))
+        mic_photo = ImageTk.PhotoImage(mic_image)
+
+        self.mic_btn = ctk.CTkButton(
             input_frame,
-            text="🎤",
+            text="",
+            image=mic_photo,
             width=44,
             height=44,
             corner_radius=12,
@@ -248,7 +256,9 @@ class NaviAssistant(ctk.CTk):
             font=("Arial", 20, "bold"),
             command=self.voice_input
         )
-        self.voice_btn.pack(side="right")
+        self.mic_btn.image = mic_photo  # prevent garbage collection
+        self.mic_btn.pack(side="right")
+
 
         # Long purple "Type Help" button
         self.submit_btn = ctk.CTkButton(
@@ -385,7 +395,7 @@ class NaviAssistant(ctk.CTk):
             threading.Thread(
                 target=speak_with_eleven,
                 args=("All steps are completed! Great job! You can now close this window or ask for more help.",),
-                kwargs={"on_finished": self.after_speech_response},
+                kwargs={"on_finished": self.voice_input},
                 daemon=True
             ).start()
             self.yes_btn.configure(state="disabled")
