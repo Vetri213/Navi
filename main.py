@@ -181,41 +181,45 @@ class NaviAssistant(ctk.CTk):
         """Create the collapsed floating button."""
         self.collapsed_frame = ctk.CTkFrame(
             self,
-            fg_color=("#667eea", "#764ba2"),
-            corner_radius=28,
+            fg_color=("#667eea", "#764ba2"),  # a clean purple
+            corner_radius=32,
             border_width=0
         )
         self.collapsed_frame.pack(fill="both", expand=True, padx=0, pady=0)
 
         button_content = ctk.CTkFrame(
             self.collapsed_frame,
-            fg_color="transparent",
-            corner_radius=0
+            fg_color="transparent"
         )
-        button_content.pack(fill="both", expand=True, padx=16, pady=12)
-
-        icon_label = ctk.CTkLabel(
-            button_content,
-            text="✨",
-            font=("Arial", 20),
-            text_color="white"
-        )
-        icon_label.pack(side="left", padx=(0, 8))
+        button_content.pack(fill="both", expand=True, padx=20, pady=10)
 
         text_label = ctk.CTkLabel(
             button_content,
-            text="NAVIGATE",
-            font=("Arial", 14, "bold"),
-            text_color="white",
-            justify="center"
+            text="ASK NAVI",
+            font=("Arial", 15, "bold"),
+            text_color="white"
         )
-        text_label.pack(side="left")
-        self.attributes("-transparentcolor", self.cget("fg_color"))
+        text_label.pack()
 
-        self.collapsed_frame.bind("<Button-1>", lambda e: self.expand())
-        button_content.bind("<Button-1>", lambda e: self.expand())
-        icon_label.bind("<Button-1>", lambda e: self.expand())
-        text_label.bind("<Button-1>", lambda e: self.expand())
+        # Add subtle drop shadow & glow (Windows-like)
+        self.attributes("-transparentcolor", self.cget("fg_color"))
+        self.collapsed_frame.configure(fg_color="#7C3AED")
+        self.configure(bg="#000000")
+        self.attributes("-alpha", 0.96)  # subtle transparency
+
+        # Hover effect: lighten color slightly
+        def on_hover(e):
+            self.collapsed_frame.configure(fg_color="#8B5CF6")
+
+        def on_leave(e):
+            self.collapsed_frame.configure(fg_color="#7C3AED")
+
+        self.collapsed_frame.bind("<Enter>", on_hover)
+        self.collapsed_frame.bind("<Leave>", on_leave)
+
+        # Make entire frame clickable
+        for widget in (self.collapsed_frame, button_content, text_label):
+            widget.bind("<Button-1>", lambda e: self.expand())
 
     def expand(self):
         """Expand to full panel."""
@@ -253,74 +257,86 @@ class NaviAssistant(ctk.CTk):
         )
         self.expanded_frame.pack(fill="both", expand=True)
 
-        header = ctk.CTkFrame(
+        # --- Header Bar (for collapse button) ---
+        header_frame = ctk.CTkFrame(
             self.expanded_frame,
-            fg_color=("#667eea", "#764ba2"),
-            corner_radius=0,
-            height=80
+            fg_color="#f3f4f6",
+            corner_radius=20,
+            height=40
         )
-        header.pack(fill="x", padx=0, pady=0)
-        header.pack_propagate(False)
+        header_frame.pack(fill="x", padx=10, pady=(10, 0))
+        header_frame.pack_propagate(False)
 
-        header_content = ctk.CTkFrame(header, fg_color="transparent")
-        header_content.pack(fill="both", expand=True, padx=20, pady=16)
-
-        title_frame = ctk.CTkFrame(header_content, fg_color="transparent")
-        title_frame.pack(side="left", fill="y")
-
-        title = ctk.CTkLabel(
-            title_frame,
-            text="AI Assistant",
-            font=("Arial", 20, "bold"),
-            text_color="white"
-        )
-        title.pack(anchor="w")
-
-        subtitle = ctk.CTkLabel(
-            title_frame,
-            text="Get step-by-step help",
-            font=("Arial", 12),
-            text_color="white"
-        )
-        subtitle.pack(anchor="w")
-
+        # Small "×" close button on the right
         close_btn = ctk.CTkButton(
-            header_content,
+            header_frame,
             text="×",
-            width=36,
-            height=36,
-            corner_radius=18,
-            fg_color="white",
-            hover_color="black",
-            font=("Arial", 24),
+            width=30,
+            height=30,
+            corner_radius=15,
+            fg_color="#e5e7eb",
+            hover_color="#d1d5db",
+            text_color="black",
+            font=("Arial", 18, "bold"),
             command=self.collapse
         )
-        close_btn.pack(side="right")
+        close_btn.pack(side="right", padx=(0, 5), pady=5)
 
+        # Optional: Title text on the left for symmetry
+        title_label = ctk.CTkLabel(
+            header_frame,
+            text="Navi Assistant",
+            font=("Arial", 14, "bold"),
+            text_color="#374151"
+        )
+        title_label.pack(side="left", padx=10)
+
+        # --- Main content container ---
         content = ctk.CTkFrame(
             self.expanded_frame,
             fg_color="transparent"
         )
         content.pack(fill="both", expand=True, padx=20, pady=20)
 
-        self.input_entry = ctk.CTkEntry(
+        # --- Input Section (entry + mic button side-by-side) ---
+        input_frame = ctk.CTkFrame(
             content,
+            fg_color="transparent"
+        )
+        input_frame.pack(fill="x", pady=(0, 12))
+
+        # Black input box
+        self.input_entry = ctk.CTkEntry(
+            input_frame,
             placeholder_text="What do you need help with?",
             height=44,
             corner_radius=12,
-            border_width=2,
-            border_color="#e5e7eb",
+            border_width=0,
+            fg_color="#1f2937",
+            text_color="white",
             font=("Arial", 14)
         )
-        self.input_entry.pack(fill="x", pady=(0, 12))
+        self.input_entry.pack(side="left", fill="x", expand=True, padx=(0, 8))
         self.input_entry.bind("<Return>", lambda e: self.process_command())
 
-        button_frame_top = ctk.CTkFrame(content, fg_color="transparent")
-        button_frame_top.pack(fill="x", pady=(0, 16))
+        # Microphone button (on right end of entry)
+        self.voice_btn = ctk.CTkButton(
+            input_frame,
+            text="🎤",
+            width=44,
+            height=44,
+            corner_radius=12,
+            fg_color="#10b981",
+            hover_color="#059669",
+            font=("Arial", 20, "bold"),
+            command=self.voice_input
+        )
+        self.voice_btn.pack(side="right")
 
+        # Long purple "Type Help" button
         self.submit_btn = ctk.CTkButton(
-            button_frame_top,
-            text="💬 Type Help",
+            content,
+            text="Ask Navi",
             height=44,
             corner_radius=12,
             fg_color=("#667eea", "#764ba2"),
@@ -328,22 +344,9 @@ class NaviAssistant(ctk.CTk):
             font=("Arial", 14, "bold"),
             command=self.process_command
         )
-        self.submit_btn.pack(side="left", fill="x", expand=True, padx=(0, 6))
-
-        self.voice_btn = ctk.CTkButton(
-            button_frame_top,
-            text="🎤 Speak",
-            height=44,
-            corner_radius=12,
-            fg_color="#10b981",
-            hover_color="#059669",
-            font=("Arial", 14, "bold"),
-            command=self.voice_input
-        )
-        self.voice_btn.pack(side="right", fill="x", expand=True, padx=(6, 0))
-
         self.submit_btn.pack(fill="x", pady=(0, 16))
 
+        # --- Output Area ---
         self.output_frame = ctk.CTkFrame(
             content,
             fg_color="white",
@@ -364,12 +367,13 @@ class NaviAssistant(ctk.CTk):
         self.output_text.insert("1.0", "Enter a question above to get started...")
         self.output_text.configure(state="disabled")
 
+        # --- Yes/No Buttons ---
         button_frame = ctk.CTkFrame(content, fg_color="transparent")
         button_frame.pack(fill="x")
 
         self.yes_btn = ctk.CTkButton(
             button_frame,
-            text="✓ Yes, Next Step",
+            text="Yes, Next Step",
             height=44,
             corner_radius=12,
             fg_color="#10b981",
@@ -382,7 +386,7 @@ class NaviAssistant(ctk.CTk):
 
         self.no_btn = ctk.CTkButton(
             button_frame,
-            text="✗ No, Clarify",
+            text="No, Clarify",
             height=44,
             corner_radius=12,
             fg_color="#ef4444",
@@ -526,8 +530,6 @@ Task:
 
 
 if __name__ == "__main__":
-    print(sd.query_devices())
-    print("Default:", sd.default.device)
     configure_gemini()
     app = NaviAssistant()
     app.mainloop()
