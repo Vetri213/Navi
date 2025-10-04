@@ -1,11 +1,12 @@
 from core.gemini_handler import query_gemini, parse_steps
-from core.voice_handler import record_audio, transcribe_audio_with_eleven, speak_with_eleven
+from core.voice_handler import record_audio, transcribe_audio_with_eleven, speak_with_eleven, stop_speech
 from core.screenshot_handler import take_screenshot
 from core.wake_word_handler import WakeWordDetector
 import customtkinter as ctk
 import os
 import platform
 import threading
+
 
 class NaviAssistant(ctk.CTk):
     def __init__(self):
@@ -384,11 +385,13 @@ class NaviAssistant(ctk.CTk):
 
     def handle_yes(self):
         """Handle Yes button click."""
+        stop_speech()
         self.current_step += 1
         self.display_step()
 
     def handle_no(self):
         """Handle No button click."""
+        stop_speech()
         if self.current_step >= len(self.steps):
             return
 
@@ -419,7 +422,7 @@ Task:
         clarification_text = f"Clarification for Step {self.current_step + 1}\n\n"
         clarification_text += clarification
         clarification_text += "\n\nDid that help?"
-        print(clarification)
+
         self.update_output(clarification_text, "#374151")
         # Speak asynchronously (no UI delay)
         threading.Thread(target=speak_with_eleven, args=(clarification+"\nDid that help?",), daemon=True).start()

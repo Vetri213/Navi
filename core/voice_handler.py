@@ -53,68 +53,63 @@ def clean_tts_text(text: str) -> str:
 
     return text
 
+
+# Initialize pygame mixer once
+pygame.mixer.init()
+
+# Global variable to track current playback
+current_audio_channel = None
+
 def speak_with_eleven(text, voice_id="JBFqnCBsd6RMkjVDRZzb"):
-    """
-    Convert text to speech using ElevenLabs API and play it with pygame.
-    Non-blocking playback — Navi can talk while doing other stuff.
-    """
+    """Convert text to speech using ElevenLabs API and play it with pygame."""
+    global current_audio_channel
+
     ELEVEN_API_KEY = os.getenv("ELEVEN_API_KEY")
     if not ELEVEN_API_KEY:
-        raise RuntimeError("ELEVEN_API_KEY not found in environment variables.")
+        print("❌ ELEVEN_API_KEY missing in environment.")
+        return
+
+    # --- Clean the text (remove unwanted chars like * but keep numbers) ---
+    clean_text = "".join(ch for ch in text if ch.isalnum() or ch.isspace() or ch in ".,!?")
 
     url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}"
     headers = {
         "xi-api-key": ELEVEN_API_KEY,
-        "Content-Type": "application/json",
-        "Accept": "audio/mpeg"  # ask for MP3
+        "Accept": "audio/mpeg",
+        "Content-Type": "application/json"
     }
-
-    text = clean_tts_text(text)
-
     payload = {
-        "text": text,
+        "text": clean_text,
         "model_id": "eleven_turbo_v2",
-        "voice_settings": {
-            "stability": 0.6,
-            "similarity_boost": 0.8
-        }
+        "voice_settings": {"stability": 0.6, "similarity_boost": 0.8}
     }
-
-    # Request audio
-    response = requests.post(url, json=payload, headers=headers)
-    if response.status_code != 200:
-        print(f"❌ Error {response.status_code}: {response.text}")
-        return None
-
-    # Save MP3 file temporarily
-    tmp = tempfile.NamedTemporaryFile(suffix=".mp3", delete=False)
-    tmp.write(response.content)
-    tmp.flush()
-    tmp.close()
-
-    # Initialize pygame if not already
-    if not pygame.mixer.get_init():
-        pygame.mixer.init()
 
     try:
-        # Load and play
+        response = requests.post(url, headers=headers, json=payload)
+        response.raise_for_status()
+    except requests.RequestException as e:
+        print("❌ Error from ElevenLabs:", e)
+        return
+
+    # Save to temporary MP3 file
+    tmp = tempfile.NamedTemporaryFile(suffix=".mp3", delete=False)
+    tmp.write(response.content)
+    tmp.close()
+
+    # Stop any previous playback first
+    if pygame.mixer.music.get_busy():
+        pygame.mixer.music.stop()
+
+    # Play new audio
+    try:
         pygame.mixer.music.load(tmp.name)
         pygame.mixer.music.play()
-        print(f"🔊 Navi speaking: “{text}”")
-
-        # Optional: block until playback finishes
-        while pygame.mixer.music.get_busy():
-            pygame.time.Clock().tick(10)
-
+        current_audio_channel = tmp.name
     except Exception as e:
-        print(f"⚠️ Playback failed: {e}")
-        return None
+        print("⚠️ Failed to play audio:", e)
 
-    finally:
-        # Clean up
-        try:
-            os.remove(tmp.name)
-        except OSError:
-            pass
+def stop_speech():
+    """Stop any ongoing speech playback."""
+    if pygame.mixer.music.get_busy():
+        pygame.mixer.music.stop()
 
-    return True
