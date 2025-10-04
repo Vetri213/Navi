@@ -1,6 +1,3 @@
-import re
-import time
-
 from core.gemini_handler import query_gemini, parse_steps
 from core.voice_handler import record_audio, transcribe_audio_with_eleven, speak_with_eleven, stop_speech
 from core.screenshot_handler import take_screenshot
@@ -40,17 +37,6 @@ class NaviAssistant(ctk.CTk):
 
         # Start checking for wake word events
         self.check_wake_word_queue()
-
-    def clean_markdown_for_display(text: str) -> str:
-        # Remove bold/italic markers
-        text = re.sub(r"(\*\*|__)(.*?)\1", r"\2", text)  # **bold**
-        text = re.sub(r"(\*|_)(.*?)\1", r"\2", text)  # *italic*
-        # Convert markdown-style lists to plain lists
-        text = re.sub(r"^\s*[-*]\s+", "• ", text, flags=re.MULTILINE)
-        text = re.sub(r"^\s*\d+\.\s+", "", text, flags=re.MULTILINE)
-        # Remove stray backticks and extra symbols
-        text = re.sub(r"`+", "", text)
-        return text.strip()
 
     def position_window(self, size):
         """Position window in bottom-right corner using given size tuple (w, h)."""
@@ -386,7 +372,7 @@ class NaviAssistant(ctk.CTk):
             # Speak asynchronously (no UI delay)
             threading.Thread(
                 target=speak_with_eleven,
-                args=((self.clean_markdown_for_display(current + " " + follow_up)),),
+                args=(current + " " + follow_up,),
                 kwargs={"on_finished": self.after_speech_response},
                 daemon=True
             ).start()
@@ -427,16 +413,17 @@ class NaviAssistant(ctk.CTk):
             return
 
         clarification_prompt = f"""You gave this step to the user:
-        {self.steps[self.current_step]}
-        
-        The user clicked "No" - they couldn't complete it or are confused.
-        
-        Task:
-        - Re-explain this step much more clearly
-        - Use extremely simple language
-        - Mention exactly what to look for (colors, text, icons, position)
-        - Break into smaller sub-steps if needed
-        """
+{self.steps[self.current_step]}
+
+The user clicked "No" - they couldn't complete it or are confused.
+
+Task:
+- Re-explain this step much more clearly
+- Use extremely simple language
+- Mention exactly what to look for (colors, text, icons, position)
+- Break into smaller sub-steps if needed
+"""
+
         clarification = query_gemini(clarification_prompt, screenshot)
 
         clarification_text = f"Clarification for Step {self.current_step + 1}\n\n"
@@ -445,24 +432,15 @@ class NaviAssistant(ctk.CTk):
 
         self.update_output(clarification_text, "#374151")
         # Speak asynchronously (no UI delay)
-        threading.Thread(target=speak_with_eleven, args=(self.clean_markdown_for_display(clarification+"\nDid that help?"),), daemon=True).start()
+        threading.Thread(target=speak_with_eleven, args=(clarification+"\nDid that help?",), daemon=True).start()
         self.yes_btn.configure(state="normal")
         self.no_btn.configure(state="normal")
 
-
-    def update_output(self, text, color="#374151", animate=True, delay=15):
-        """Smoothly type text instead of dumping all at once."""
+    def update_output(self, text, color="#374151"):
+        """Update output text area."""
         self.output_text.configure(state="normal", text_color=color)
         self.output_text.delete("1.0", "end")
-        time.sleep(1)
-        if animate:
-            for i in range(len(text)):
-                self.output_text.insert("end", text[i])
-                if i % 3 == 0:
-                    self.output_text.update()
-                    self.after(delay)
-        else:
-            self.output_text.insert("end", text)
+        self.output_text.insert("1.0", text.replace("**",""))
         self.output_text.configure(state="disabled")
 
     def after_speech_response(self):
@@ -496,5 +474,3 @@ class NaviAssistant(ctk.CTk):
 
         except Exception as e:
             self.update_output(f"Error recording: {e}", "#ef4444")
-
-
