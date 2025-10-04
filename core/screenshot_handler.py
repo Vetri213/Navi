@@ -1,13 +1,13 @@
-import pyautogui, time
+import pyautogui
 
-def take_screenshot(window):
+def take_screenshot():
+    """
+    Takes a screenshot of the entire screen.
+    This function no longer handles hiding/showing windows.
+    """
     try:
-        window.withdraw()
-        time.sleep(0.3)
         screenshot = pyautogui.screenshot()
-        window.deiconify()
         return screenshot
     except Exception as e:
-        window.deiconify()
         print(f"Screenshot error: {e}")
         return None

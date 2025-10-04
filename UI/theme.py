@@ -1,5 +1,0 @@
-PRIMARY = "#7C3AED"
-ACCENT = "#10b981"
-ERROR = "#ef4444"
-TEXT_DARK = "#1f2937"
-FONT = ("Arial", 14)

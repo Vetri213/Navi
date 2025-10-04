@@ -1,116 +1,94 @@
 """
-Embedded Tkinter-based wave animation with gradient colors.
-Works natively with CustomTkinter - no multiprocessing needed!
-Optimized for performance with background threading.
+PySide6-based Siri-like audio animation with gradient waves.
+Beautiful animated orb that responds to voice input.
 """
 
-import tkinter as tk
+from PySide6.QtCore import (
+    QTimer, 
+    QPointF, 
+    QRectF, 
+    Property, 
+    Signal, 
+    Qt,
+    QObject,
+    QPropertyAnimation,
+    QEasingCurve
+)
+from PySide6.QtWidgets import QWidget
+from PySide6.QtGui import (
+    QPainter, 
+    QColor, 
+    QPen, 
+    QRadialGradient,
+    QPainterPath,
+    QLinearGradient
+)
 import math
 import random
-import threading
-from queue import Queue
 
 
-class GradientWaveAnimation(tk.Canvas):
+class SiriLikeAnimation(QWidget):
     """
-    A canvas widget that displays animated gradient waves.
-    Can be embedded directly in a CustomTkinter application.
+    A Siri-like animated orb that responds to voice input.
+    Features smooth gradient waves that pulse and flow.
     """
     
-    def __init__(self, parent, width=400, height=100, **kwargs):
-        super().__init__(parent, width=width, height=height, 
-                        bg='#1a1a2e', highlightthickness=0, **kwargs)
+    def __init__(self, parent=None, width=400, height=100):
+        super().__init__(parent)
+        self.setFixedSize(width, height)
         
         # Animation state
         self._animation_state = "idle"  # "idle" or "listening"
-        self._is_running = False
-        self._stop_thread = threading.Event()
+        self._phase = 0.0
+        self._amplitude = 0.0
+        self._target_amplitude = 0.0
         
         # Wave parameters
-        self._phase = 0.0
-        self._target_amplitude = 0.0
-        self._current_amplitude = 0.0
-        self._amplitude_velocity = 0.0
+        self.idle_amplitude = 15.0
+        self.listening_amplitude = 35.0
         
-        # Idle state parameters (optimized for performance)
-        self.idle_amplitude = 12.0
-        self.idle_frequency = 0.6
-        self.idle_speed = 0.04
-        self.idle_wave_count = 3
-        
-        # Listening state parameters (optimized for performance)
-        self.listening_amplitude = 30.0
-        self.listening_frequency = 1.2
-        self.listening_speed = 0.1
-        self.listening_wave_count = 4  # Reduced from 5 for performance
-        
-        # Current parameters
-        self.amplitude = self.idle_amplitude
-        self.frequency = self.idle_frequency
-        self.speed = self.idle_speed
-        self.wave_count = self.idle_wave_count
-        
-        # Audio simulation (for listening state reactivity)
-        self._simulated_volume = 0.5
+        # Audio reactivity simulation
+        self._volume = 0.5
         self._volume_target = 0.5
         
-        # Gradient color scheme - beautiful blend
+        # Gradient colors - beautiful purple/pink theme
         self.gradient_colors = [
-            "#7C3AED",  # Purple
-            "#EC4899",  # Pink
-            "#8B5CF6",  # Light purple
-            "#F97316",  # Orange
-            "#06B6D4",  # Cyan
+            QColor("#7C3AED"),  # Purple
+            QColor("#EC4899"),  # Pink
+            QColor("#8B5CF6"),  # Light purple
+            QColor("#F97316"),  # Orange
+            QColor("#06B6D4"),  # Cyan
         ]
         
-        # Threading for calculations
-        self.calculation_thread = None
-        self.wave_data_queue = Queue(maxsize=2)  # Buffer only 2 frames
-        
         # Animation timer
-        self.animation_id = None
+        self.timer = QTimer(self)
+        self.timer.timeout.connect(self.update_animation)
         
-        # Performance optimization: reduce point count
-        self.num_points = 100  # Reduced from 150 for better performance
+        # Orb parameters for Siri-like effect
+        self.orb_radius = 25.0
+        self.orb_pulse_factor = 1.0
+        self.orb_target_pulse = 1.0
         
-        print("✨ Embedded gradient wave animation initialized (optimized)")
+        # Wave layers
+        self.wave_count = 4
+        self.wave_layers = []
+        
+        # Background
+        self.setStyleSheet("background-color: #1a1a2e;")
+        
+        print("✨ Siri-like animation initialized")
     
     def start_animation(self):
-        """Start the wave animation with background thread for calculations."""
-        if self._is_running:
-            return
-        
-        self._is_running = True
-        self._stop_thread.clear()
-        
-        # Start calculation thread
-        self.calculation_thread = threading.Thread(
-            target=self._calculation_loop,
-            daemon=True
-        )
-        self.calculation_thread.start()
-        
-        # Start rendering loop on main thread
-        self._render_loop()
-        print("🌊 Gradient wave animation started (threaded)")
+        """Start the animation timer."""
+        if not self.timer.isActive():
+            self.timer.start(16)  # ~60 FPS
+            print("🌊 Siri animation started")
     
     def stop_animation(self):
-        """Stop the wave animation and cleanup threads."""
-        if not self._is_running:
-            return
-        
-        self._is_running = False
-        self._stop_thread.set()
-        
-        if self.animation_id:
-            self.after_cancel(self.animation_id)
-            self.animation_id = None
-        
-        # Wait for thread to finish
-        if self.calculation_thread and self.calculation_thread.is_alive():
-            self.calculation_thread.join(timeout=0.5)
-        
-        print("🛑 Gradient wave animation stopped")
+        """Stop the animation timer."""
+        if self.timer.isActive():
+            self.timer.stop()
+            print("🛑 Siri animation stopped")
     
     def set_state(self, state):
         """
@@ -124,17 +102,12 @@ class GradientWaveAnimation(tk.Canvas):
         
         self._animation_state = state
         
-        # Smoothly transition to new parameters
         if state == "idle":
             self._target_amplitude = self.idle_amplitude
-            self.frequency = self.idle_frequency
-            self.speed = self.idle_speed
-            self.wave_count = self.idle_wave_count
+            self.orb_target_pulse = 1.0
         else:  # listening
             self._target_amplitude = self.listening_amplitude
-            self.frequency = self.listening_frequency
-            self.speed = self.listening_speed
-            self.wave_count = self.listening_wave_count
+            self.orb_target_pulse = 1.3
     
     def set_listening_intensity(self, intensity):
         """
@@ -146,139 +119,143 @@ class GradientWaveAnimation(tk.Canvas):
         if self._animation_state == "listening":
             self._volume_target = max(0.2, min(1.0, intensity))
     
-    def _calculation_loop(self):
-        """Background thread for calculating wave points (CPU-intensive)."""
-        import time
+    def update_animation(self):
+        """Update animation parameters and trigger repaint."""
+        # Update phase (moves the wave)
+        speed = 0.1 if self._animation_state == "listening" else 0.04
+        self._phase += speed
+        if self._phase > 2 * math.pi:
+            self._phase -= 2 * math.pi
         
-        while not self._stop_thread.is_set() and self._is_running:
-            start_time = time.time()
+        # Smooth amplitude transition
+        amplitude_diff = self._target_amplitude - self._amplitude
+        self._amplitude += amplitude_diff * 0.1
+        
+        # Smooth pulse transition
+        pulse_diff = self.orb_target_pulse - self.orb_pulse_factor
+        self.orb_pulse_factor += pulse_diff * 0.05
+        
+        # Simulate volume changes for listening state
+        if self._animation_state == "listening":
+            if random.random() < 0.05:
+                self._volume_target = random.uniform(0.5, 1.0)
             
-            # Update phase (moves the wave horizontally)
-            self._phase += self.speed
-            if self._phase > 2 * math.pi:
-                self._phase -= 2 * math.pi
-            
-            # Smooth amplitude transition with spring-like physics
-            amplitude_diff = self._target_amplitude - self._current_amplitude
-            self._amplitude_velocity += amplitude_diff * 0.1
-            self._amplitude_velocity *= 0.85  # Damping
-            self._current_amplitude += self._amplitude_velocity
-            
-            # For listening state, simulate volume changes
-            if self._animation_state == "listening":
-                if random.random() < 0.05:
-                    self._volume_target = random.uniform(0.4, 1.0)
-                
-                volume_diff = self._volume_target - self._simulated_volume
-                self._simulated_volume += volume_diff * 0.15
-                self.amplitude = self._current_amplitude * (0.5 + 0.5 * self._simulated_volume)
-            else:
-                self.amplitude = self._current_amplitude
-            
-            # Calculate wave data
-            wave_data = self._calculate_wave_points()
-            
-            # Put in queue (non-blocking, drop old frames if queue full)
-            try:
-                if not self.wave_data_queue.full():
-                    self.wave_data_queue.put_nowait(wave_data)
-            except:
-                pass
-            
-            # Target ~60 FPS (16ms per frame)
-            elapsed = time.time() - start_time
-            sleep_time = max(0, 0.016 - elapsed)
-            time.sleep(sleep_time)
+            volume_diff = self._volume_target - self._volume
+            self._volume += volume_diff * 0.15
+        
+        # Trigger repaint
+        self.update()
     
-    def _render_loop(self):
-        """Main thread rendering loop (just draws, no calculations)."""
-        if not self._is_running:
-            return
+    def paintEvent(self, event):
+        """Paint the Siri-like animation."""
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        painter.setRenderHint(QPainter.SmoothPixmapTransform)
         
-        # Get calculated wave data from queue
-        try:
-            wave_data = self.wave_data_queue.get_nowait()
-            self._draw_waves_from_data(wave_data)
-        except:
-            pass  # No new data, skip this frame
-        
-        # Schedule next render (~60 FPS)
-        self.animation_id = self.after(16, self._render_loop)
-    
-    def _calculate_wave_points(self):
-        """Calculate wave points in background thread (CPU-intensive)."""
-        width = self.winfo_width()
-        height = self.winfo_height()
-        
-        if width <= 1 or height <= 1:
-            return None
-        
+        width = self.width()
+        height = self.height()
+        center_x = width / 2
         center_y = height / 2
-        waves = []
         
-        # Calculate points for each wave layer
+        # Draw background
+        painter.fillRect(0, 0, width, height, QColor("#1a1a2e"))
+        
+        if self._animation_state == "idle":
+            # Draw central glowing orb for idle state
+            self._draw_idle_orb(painter, center_x, center_y)
+        else:
+            # Draw Siri-like reactive waves for listening state
+            self._draw_listening_waves(painter, center_x, center_y, width, height)
+    
+    def _draw_idle_orb(self, painter, cx, cy):
+        """Draw a pulsing orb for idle state."""
+        radius = self.orb_radius * self.orb_pulse_factor
+        
+        # Create radial gradient
+        gradient = QRadialGradient(cx, cy, radius)
+        gradient.setColorAt(0, QColor(124, 58, 237, 200))  # Purple center
+        gradient.setColorAt(0.5, QColor(139, 92, 246, 150))
+        gradient.setColorAt(1, QColor(124, 58, 237, 0))  # Transparent edge
+        
+        painter.setBrush(gradient)
+        painter.setPen(Qt.NoPen)
+        painter.drawEllipse(QPointF(cx, cy), radius, radius)
+        
+        # Add outer glow
+        outer_radius = radius * 1.5
+        outer_gradient = QRadialGradient(cx, cy, outer_radius)
+        outer_gradient.setColorAt(0, QColor(124, 58, 237, 50))
+        outer_gradient.setColorAt(1, QColor(124, 58, 237, 0))
+        
+        painter.setBrush(outer_gradient)
+        painter.drawEllipse(QPointF(cx, cy), outer_radius, outer_radius)
+    
+    def _draw_listening_waves(self, painter, cx, cy, width, height):
+        """Draw Siri-like reactive waves for listening state."""
+        # Calculate current amplitude with volume
+        current_amp = self._amplitude * (0.5 + 0.5 * self._volume)
+        
+        # Draw multiple wave layers
         for i in range(self.wave_count):
             phase_offset = (i * math.pi * 2) / self.wave_count
-            amplitude_factor = 1.0 - (i * 0.12)
-            color = self.gradient_colors[i % len(self.gradient_colors)]
+            amplitude_factor = 1.0 - (i * 0.15)
+            color_idx = i % len(self.gradient_colors)
+            color = self.gradient_colors[color_idx]
             
+            # Create path for wave
+            path = QPainterPath()
             points = []
-            for x_idx in range(self.num_points + 1):
-                x = (x_idx / self.num_points) * width
-                wave_x = (x_idx / self.num_points) * 4 * math.pi
-                
-                # Primary wave
-                y = math.sin(wave_x * self.frequency + self._phase + phase_offset)
-                # Secondary harmonic
-                y += 0.3 * math.sin(wave_x * self.frequency * 2 - self._phase * 1.5 + phase_offset)
-                # Tertiary harmonic
-                y += 0.15 * math.sin(wave_x * self.frequency * 3 + self._phase * 2.5 + phase_offset)
-                
-                screen_y = center_y + (y * self.amplitude * amplitude_factor)
-                points.append((x, screen_y))
             
-            waves.append({'points': points, 'color': color})
-        
-        return waves
-    
-    def _draw_waves_from_data(self, wave_data):
-        """Draw waves from pre-calculated data (fast, on main thread)."""
-        if not wave_data:
-            return
-        
-        # Clear canvas efficiently
-        self.delete("wave")
-        
-        # Draw all waves
-        for wave in wave_data:
-            points = wave['points']
-            color = wave['color']
-            
-            if len(points) > 1:
-                # Convert to flat list
-                flat_points = [coord for point in points for coord in point]
+            num_points = 80
+            for x_idx in range(num_points + 1):
+                x = (x_idx / num_points) * width
+                wave_x = (x_idx / num_points) * 4 * math.pi
                 
-                # Draw with optimized settings for smoothness
-                self.create_line(
-                    flat_points,
-                    fill=color,
-                    width=4,  # Slightly thicker for smoother appearance
-                    smooth=True,
-                    splinesteps=20,  # More spline steps for smoother curves
-                    capstyle=tk.ROUND,  # Rounded caps for smoother edges
-                    joinstyle=tk.ROUND,  # Rounded joins
-                    tags="wave"
-                )
+                # Multi-harmonic wave calculation
+                y = math.sin(wave_x + self._phase + phase_offset)
+                y += 0.3 * math.sin(wave_x * 2 - self._phase * 1.5 + phase_offset)
+                y += 0.15 * math.sin(wave_x * 3 + self._phase * 2 + phase_offset)
+                
+                screen_y = cy + (y * current_amp * amplitude_factor)
+                points.append(QPointF(x, screen_y))
+            
+            # Draw smooth wave line
+            if points:
+                path.moveTo(points[0])
+                for point in points[1:]:
+                    path.lineTo(point)
+                
+                # Set up pen with gradient-like appearance
+                alpha = int(200 - (i * 30))
+                color.setAlpha(alpha)
+                pen = QPen(color)
+                pen.setWidth(4)
+                pen.setCapStyle(Qt.RoundCap)
+                pen.setJoinStyle(Qt.RoundJoin)
+                
+                painter.setPen(pen)
+                painter.setBrush(Qt.NoBrush)
+                painter.drawPath(path)
+        
+        # Draw central orb
+        orb_radius = 15 * self.orb_pulse_factor * (1 + 0.3 * self._volume)
+        gradient = QRadialGradient(cx, cy, orb_radius)
+        gradient.setColorAt(0, QColor(236, 72, 153, 220))  # Pink center
+        gradient.setColorAt(0.6, QColor(139, 92, 246, 180))
+        gradient.setColorAt(1, QColor(124, 58, 237, 0))
+        
+        painter.setBrush(gradient)
+        painter.setPen(Qt.NoPen)
+        painter.drawEllipse(QPointF(cx, cy), orb_radius, orb_radius)
     
     def get_state(self):
         """Get current animation state."""
         return self._animation_state
 
 
-# Convenience wrapper for easy integration
-class EmbeddedAnimationController:
+class EmbeddedAnimationController(QObject):
     """
-    Controller to manage embedded animation - drop-in replacement for AnimationController.
+    Controller to manage Siri-like animation.
     """
     
     def __init__(self, parent, width=400, height=100):
@@ -286,15 +263,16 @@ class EmbeddedAnimationController:
         Initialize the embedded animation.
         
         Args:
-            parent: Parent CustomTkinter widget
+            parent: Parent PySide6 widget
             width: Animation width
             height: Animation height
         """
-        self.animation = GradientWaveAnimation(parent, width=width, height=height)
+        super().__init__(parent)
+        self.animation = SiriLikeAnimation(parent, width=width, height=height)
         self._started = False
     
     def get_widget(self):
-        """Get the canvas widget to pack/grid into the UI."""
+        """Get the animation widget to add to layouts."""
         return self.animation
     
     def start(self):
@@ -326,72 +304,75 @@ class EmbeddedAnimationController:
 
 # Test function
 if __name__ == "__main__":
-    import customtkinter as ctk
+    import sys
+    from PySide6.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget, QPushButton, QLabel
     
     print("\n" + "="*60)
-    print("🌈 TESTING EMBEDDED GRADIENT WAVE ANIMATION")
+    print("🌈 TESTING SIRI-LIKE ANIMATION")
     print("="*60 + "\n")
     
-    app = ctk.CTk()
-    app.title("Embedded Animation Test")
-    app.geometry("600x400")
+    app = QApplication(sys.argv)
+    
+    window = QMainWindow()
+    window.setWindowTitle("Siri-Like Animation Test")
+    window.setGeometry(100, 100, 600, 400)
+    
+    central = QWidget()
+    window.setCentralWidget(central)
+    layout = QVBoxLayout(central)
     
     # Title
-    title = ctk.CTkLabel(
-        app,
-        text="Gradient Wave Animation Test",
-        font=("Arial", 20, "bold")
-    )
-    title.pack(pady=20)
+    title = QLabel("Siri-Like Animation Test")
+    title.setStyleSheet("font-size: 20px; font-weight: bold; color: white;")
+    title.setAlignment(Qt.AlignCenter)
+    layout.addWidget(title)
     
-    # Create animation widget
-    anim_controller = EmbeddedAnimationController(app, width=500, height=120)
+    # Animation
+    anim_controller = EmbeddedAnimationController(central, width=500, height=120)
     anim_widget = anim_controller.get_widget()
-    anim_widget.pack(pady=20, padx=20)
+    layout.addWidget(anim_widget)
     
     # Start animation
     anim_controller.start()
     anim_controller.set_idle()
     
     # Control buttons
-    button_frame = ctk.CTkFrame(app)
-    button_frame.pack(pady=20)
+    button_widget = QWidget()
+    button_layout = QVBoxLayout(button_widget)
     
     def toggle_state():
         current = anim_controller.animation.get_state()
         if current == "idle":
             anim_controller.set_listening()
-            toggle_btn.configure(text="Switch to Idle")
+            toggle_btn.setText("Switch to Idle")
         else:
             anim_controller.set_idle()
-            toggle_btn.configure(text="Switch to Listening")
+            toggle_btn.setText("Switch to Listening")
     
-    toggle_btn = ctk.CTkButton(
-        button_frame,
-        text="Switch to Listening",
-        command=toggle_state,
-        width=200
-    )
-    toggle_btn.pack(side="left", padx=10)
+    toggle_btn = QPushButton("Switch to Listening")
+    toggle_btn.clicked.connect(toggle_state)
+    toggle_btn.setStyleSheet("padding: 10px; font-size: 14px;")
+    button_layout.addWidget(toggle_btn)
     
-    close_btn = ctk.CTkButton(
-        button_frame,
-        text="Close",
-        command=app.quit,
-        width=100
-    )
-    close_btn.pack(side="left", padx=10)
+    close_btn = QPushButton("Close")
+    close_btn.clicked.connect(app.quit)
+    close_btn.setStyleSheet("padding: 10px; font-size: 14px;")
+    button_layout.addWidget(close_btn)
     
-    info = ctk.CTkLabel(
-        app,
-        text="🌈 Beautiful gradient colors blending together!\nClick 'Switch' to see idle vs listening states",
-        font=("Arial", 12)
-    )
-    info.pack(pady=10)
+    layout.addWidget(button_widget)
+    
+    # Info label
+    info = QLabel("🌈 Beautiful Siri-like animation!\nClick 'Switch' to toggle between idle and listening states")
+    info.setStyleSheet("color: white; font-size: 12px;")
+    info.setAlignment(Qt.AlignCenter)
+    layout.addWidget(info)
+    
+    # Set dark background
+    central.setStyleSheet("background-color: #1a1a2e;")
     
     print("✅ Test window opened!")
     print("   Click 'Switch' to toggle between idle and listening states")
-    print("   Watch the gradient colors blend beautifully!\n")
+    print("   Watch the beautiful Siri-like animation!\n")
     
-    app.mainloop()
-
+    window.show()
+    sys.exit(app.exec())

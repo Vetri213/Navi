@@ -3,8 +3,8 @@ cachetools==6.2.0
 certifi==2025.8.3
 cffi==2.0.0
 charset-normalizer==3.4.3
-customtkinter==5.2.2
 darkdetect==0.8.0
+PySide6==6.9.3
 google-ai-generativelanguage==0.6.15
 google-api-core==2.25.2
 google-api-python-client==2.184.0
