@@ -316,6 +316,7 @@ class NaviAssistant(ctk.CTk):
 
     def process_command(self):
         """Process user command."""
+        stop_speech()
         user_text = self.input_entry.get().strip()
         if not user_text:
             self.update_output("Please enter a command or question.", "#ef4444")
@@ -457,6 +458,7 @@ Task:
 
     def voice_input(self):
         """Capture voice and process as text command."""
+        stop_speech()
         try:
             self.update_output("🎙️ Listening...", "#667eea")
             self.update()
