@@ -11,6 +11,44 @@ import io
 
 from dotenv import load_dotenv
 
+import sounddevice as sd
+import numpy as np
+import requests
+
+import soundfile as sf
+import tempfile
+
+sd.default.device = 2
+
+
+def record_audio(duration=5, samplerate=16000):
+    """Record user's voice for given duration (in seconds)."""
+    print("🎤 Listening... (Speak now)")
+    audio = sd.rec(int(duration * samplerate), samplerate=samplerate, channels=1, dtype=np.int16)
+    sd.wait()
+    print("✅ Recording complete.")
+    return np.squeeze(audio)
+
+def transcribe_audio_with_eleven(audio_data, samplerate=16000):
+    ELEVEN_API_KEY = os.getenv("ELEVEN_API_KEY")
+    url = "https://api.elevenlabs.io/v1/speech-to-text"
+    headers = {"xi-api-key": ELEVEN_API_KEY}
+
+    wav_path = save_wav(audio_data, samplerate)
+
+    with open(wav_path, "rb") as f:
+        files = {
+            "file": (wav_path, f, "audio/wav"),
+            "model_id": (None, "scribe_v1"),
+        }
+        r = requests.post(url, headers=headers, files=files)
+
+    if r.status_code != 200:
+        print("Error:", r.text)
+        return None
+
+    return r.json().get("text", "")
+
 ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("blue")
 
@@ -28,6 +66,10 @@ def configure_gemini():
         sys.exit(1)
     genai.configure(api_key=api_key)
 
+def save_wav(audio_data, samplerate=16000):
+    tmp = tempfile.NamedTemporaryFile(suffix=".wav", delete=False)
+    sf.write(tmp.name, audio_data, samplerate, subtype="PCM_16")
+    return tmp.name
 
 def take_screenshot(window):
     """Take a screenshot after hiding the window."""
@@ -273,9 +315,12 @@ class NaviAssistant(ctk.CTk):
         self.input_entry.pack(fill="x", pady=(0, 12))
         self.input_entry.bind("<Return>", lambda e: self.process_command())
 
+        button_frame_top = ctk.CTkFrame(content, fg_color="transparent")
+        button_frame_top.pack(fill="x", pady=(0, 16))
+
         self.submit_btn = ctk.CTkButton(
-            content,
-            text="Get Help",
+            button_frame_top,
+            text="💬 Type Help",
             height=44,
             corner_radius=12,
             fg_color=("#667eea", "#764ba2"),
@@ -283,6 +328,20 @@ class NaviAssistant(ctk.CTk):
             font=("Arial", 14, "bold"),
             command=self.process_command
         )
+        self.submit_btn.pack(side="left", fill="x", expand=True, padx=(0, 6))
+
+        self.voice_btn = ctk.CTkButton(
+            button_frame_top,
+            text="🎤 Speak",
+            height=44,
+            corner_radius=12,
+            fg_color="#10b981",
+            hover_color="#059669",
+            font=("Arial", 14, "bold"),
+            command=self.voice_input
+        )
+        self.voice_btn.pack(side="right", fill="x", expand=True, padx=(6, 0))
+
         self.submit_btn.pack(fill="x", pady=(0, 16))
 
         self.output_frame = ctk.CTkFrame(
@@ -445,8 +504,30 @@ Task:
         self.output_text.insert("1.0", text.replace("**",""))
         self.output_text.configure(state="disabled")
 
+    def voice_input(self):
+        """Capture voice and process as text command."""
+        try:
+            self.update_output("🎙️ Listening...", "#667eea")
+            self.update()
+
+            audio_data = record_audio(duration=5)  # adjust time if needed
+            text = transcribe_audio_with_eleven(audio_data)
+
+            if text:
+                self.update_output(f"You said: “{text}”", "#374151")
+                self.input_entry.delete(0, "end")
+                self.input_entry.insert(0, text)
+                self.process_command()
+            else:
+                self.update_output("❌ Couldn't recognize speech.", "#ef4444")
+
+        except Exception as e:
+            self.update_output(f"Error recording: {e}", "#ef4444")
+
 
 if __name__ == "__main__":
+    print(sd.query_devices())
+    print("Default:", sd.default.device)
     configure_gemini()
     app = NaviAssistant()
     app.mainloop()
