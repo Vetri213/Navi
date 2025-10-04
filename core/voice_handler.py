@@ -60,8 +60,18 @@ pygame.mixer.init()
 # Global variable to track current playback
 current_audio_channel = None
 
-def speak_with_eleven(text, voice_id="JBFqnCBsd6RMkjVDRZzb"):
-    """Convert text to speech using ElevenLabs API and play it with pygame."""
+import pygame
+import tempfile
+import os
+import requests
+import time
+from core.voice_handler import record_audio, transcribe_audio_with_eleven  # to use for post-speech listening
+
+pygame.mixer.init()
+current_audio_channel = None
+
+def speak_with_eleven(text, voice_id="JBFqnCBsd6RMkjVDRZzb", on_finished=None):
+    """Speak text via ElevenLabs and trigger callback after speech ends."""
     global current_audio_channel
 
     ELEVEN_API_KEY = os.getenv("ELEVEN_API_KEY")
@@ -69,7 +79,7 @@ def speak_with_eleven(text, voice_id="JBFqnCBsd6RMkjVDRZzb"):
         print("❌ ELEVEN_API_KEY missing in environment.")
         return
 
-    # --- Clean the text (remove unwanted chars like * but keep numbers) ---
+    # Clean text
     clean_text = "".join(ch for ch in text if ch.isalnum() or ch.isspace() or ch in ".,!?")
 
     url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}"
@@ -84,32 +94,60 @@ def speak_with_eleven(text, voice_id="JBFqnCBsd6RMkjVDRZzb"):
         "voice_settings": {"stability": 0.6, "similarity_boost": 0.8}
     }
 
-    try:
-        response = requests.post(url, headers=headers, json=payload)
-        response.raise_for_status()
-    except requests.RequestException as e:
-        print("❌ Error from ElevenLabs:", e)
+    response = requests.post(url, headers=headers, json=payload)
+    if response.status_code != 200:
+        print("❌ ElevenLabs error:", response.text)
         return
 
-    # Save to temporary MP3 file
     tmp = tempfile.NamedTemporaryFile(suffix=".mp3", delete=False)
     tmp.write(response.content)
     tmp.close()
 
-    # Stop any previous playback first
     if pygame.mixer.music.get_busy():
         pygame.mixer.music.stop()
 
-    # Play new audio
     try:
         pygame.mixer.music.load(tmp.name)
         pygame.mixer.music.play()
         current_audio_channel = tmp.name
+
+        # Wait for completion (non-blocking)
+        def monitor_playback():
+            while pygame.mixer.music.get_busy():
+                time.sleep(0.2)
+            print("🎧 Navi finished speaking.")
+            if on_finished:
+                on_finished()
+
+        import threading
+        threading.Thread(target=monitor_playback, daemon=True).start()
+
     except Exception as e:
-        print("⚠️ Failed to play audio:", e)
+        print("⚠️ Could not play:", e)
+
 
 def stop_speech():
     """Stop any ongoing speech playback."""
     if pygame.mixer.music.get_busy():
         pygame.mixer.music.stop()
+
+def listen_for_yes_no(duration=4):
+    """Listen briefly and detect if user said yes or no."""
+    print("🎙️ Listening for yes/no...")
+    audio = record_audio(duration=duration)
+    text = transcribe_audio_with_eleven(audio)
+    if not text:
+        print("😶 No response detected.")
+        return None
+
+    text_lower = text.lower()
+    if any(word in text_lower for word in ["yes", "yeah", "yup", "sure", "ok", "okay"]):
+        print("✅ Detected 'yes'")
+        return "yes"
+    elif any(word in text_lower for word in ["no", "nope", "nah", "not really"]):
+        print("🚫 Detected 'no'")
+        return "no"
+    else:
+        print(f"🤔 Unclear response: {text}")
+        return None
 

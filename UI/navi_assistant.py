@@ -374,12 +374,23 @@ class NaviAssistant(ctk.CTk):
             self.yes_btn.configure(state="normal")
             self.no_btn.configure(state="normal")
             # Speak asynchronously (no UI delay)
-            threading.Thread(target=speak_with_eleven, args=(current+" "+follow_up,), daemon=True).start()
+            threading.Thread(
+                target=speak_with_eleven,
+                args=(current + " " + follow_up,),
+                kwargs={"on_finished": self.after_speech_response},
+                daemon=True
+            ).start()
         else:
             self.update_output(
-                "🎉 All steps completed!\n\nGreat job! You can now close this window or ask for more help.",
+                "🎉 All steps are completed!\n\nGreat job! You can now close this window or ask for more help.",
                 "#10b981"
             )
+            threading.Thread(
+                target=speak_with_eleven,
+                args=("All steps are completed! Great job! You can now close this window or ask for more help.",),
+                kwargs={"on_finished": self.after_speech_response},
+                daemon=True
+            ).start()
             self.yes_btn.configure(state="disabled")
             self.no_btn.configure(state="disabled")
 
@@ -435,6 +446,18 @@ Task:
         self.output_text.delete("1.0", "end")
         self.output_text.insert("1.0", text.replace("**",""))
         self.output_text.configure(state="disabled")
+
+    def after_speech_response(self):
+        """Called after Navi finishes speaking — listens for yes/no."""
+        from core.voice_handler import listen_for_yes_no
+
+        response = listen_for_yes_no()
+        if response == "yes":
+            self.handle_yes()
+        elif response == "no":
+            self.handle_no()
+        else:
+            print("🕓 No clear response — waiting for manual input.")
 
     def voice_input(self):
         """Capture voice and process as text command."""
