@@ -1,7 +1,10 @@
 from core.gemini_handler import query_gemini, parse_steps
 from core.voice_handler import record_audio, transcribe_audio_with_eleven
 from core.screenshot_handler import take_screenshot
+from core.wake_word_handler import WakeWordDetector
 import customtkinter as ctk
+import os
+import platform
 
 class NaviAssistant(ctk.CTk):
     def __init__(self):
@@ -25,6 +28,13 @@ class NaviAssistant(ctk.CTk):
 
         self.bind("<Button-1>", self.start_drag)
         self.bind("<B1-Motion>", self.on_drag)
+        
+        # Initialize wake word detection
+        self.wake_word_detector = None
+        self.start_wake_word_detection()
+        
+        # Start checking for wake word events
+        self.check_wake_word_queue()
 
     def position_window(self, size):
         """Position window in bottom-right corner using given size tuple (w, h)."""
@@ -46,6 +56,37 @@ class NaviAssistant(ctk.CTk):
         x = self.winfo_x() + event.x - self.drag_x
         y = self.winfo_y() + event.y - self.drag_y
         self.geometry(f"+{x}+{y}")
+    
+    def start_wake_word_detection(self):
+        """Start the wake word detection in a background thread."""
+        try:
+            # Get Picovoice access key from environment
+            access_key = os.environ.get("PICOVOICE_ACCESS_KEY")
+            if not access_key:
+                print("⚠️ PICOVOICE_ACCESS_KEY not found in environment.")
+                print("Wake word detection disabled. Set the key in your .env file.")
+                return
+            
+            # Create and start the wake word detector
+            self.wake_word_detector = WakeWordDetector(access_key)
+            success = self.wake_word_detector.start()
+            
+            if not success:
+                self.wake_word_detector = None
+                
+        except Exception as e:
+            print(f"❌ Failed to initialize wake word detection: {e}")
+            self.wake_word_detector = None
+    
+    def check_wake_word_queue(self):
+        """Periodically check if wake word was detected and trigger expand."""
+        if self.wake_word_detector is not None:
+            if self.wake_word_detector.check_for_wake_word():
+                print("🎯 Activating assistant from wake word...")
+                self.expand()
+        
+        # Check again in 100ms (10 times per second)
+        self.after(100, self.check_wake_word_queue)
 
     def create_collapsed_ui(self):
         """Create the collapsed floating button."""
@@ -71,11 +112,17 @@ class NaviAssistant(ctk.CTk):
         )
         text_label.pack()
 
-        # Add subtle drop shadow & glow (Windows-like)
-        self.attributes("-transparentcolor", self.cget("fg_color"))
+        # Configure appearance with cross-platform compatibility
         self.collapsed_frame.configure(fg_color="#7C3AED")
-        self.configure(bg="#000000")
-        self.attributes("-alpha", 0.96)  # subtle transparency
+        
+        # Apply platform-specific transparency
+        if platform.system() == "Windows":
+            # Windows supports transparentcolor
+            self.attributes("-transparentcolor", self.cget("fg_color"))
+            self.configure(bg="#000000")
+        
+        # Alpha transparency works on both macOS and Windows
+        self.attributes("-alpha", 0.96)
 
         # Hover effect: lighten color slightly
         def on_hover(e):

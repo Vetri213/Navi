@@ -25,12 +25,16 @@ def get_wake_word_model_path():
     else:
         raise RuntimeError(f"Unsupported platform: {system}")
     
-    # Try multiple possible paths
+    # Get the project root directory (parent of core/)
+    core_dir = os.path.dirname(os.path.abspath(__file__))
+    project_root = os.path.dirname(core_dir)
+    
+    # Try multiple possible paths (all relative to project root)
     possible_paths = [
-        os.path.join(model_dir, model_filename),  # In subdirectory
-        model_filename,  # In current directory
-        os.path.join(os.path.dirname(__file__), model_dir, model_filename),  # Relative to script
-        os.path.join(os.path.dirname(__file__), model_filename)  # Relative to script
+        os.path.join(project_root, model_dir, model_filename),  # In subdirectory at project root
+        os.path.join(project_root, model_filename),  # Directly at project root
+        os.path.join(os.getcwd(), model_dir, model_filename),  # In subdirectory at current working dir
+        os.path.join(os.getcwd(), model_filename),  # Directly at current working dir
     ]
     
     for path in possible_paths:
