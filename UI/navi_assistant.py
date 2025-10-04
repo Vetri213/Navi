@@ -30,11 +30,11 @@ class NaviAssistant(ctk.CTk):
 
         self.bind("<Button-1>", self.start_drag)
         self.bind("<B1-Motion>", self.on_drag)
-        
+
         # Initialize wake word detection
         self.wake_word_detector = None
         self.start_wake_word_detection()
-        
+
         # Start checking for wake word events
         self.check_wake_word_queue()
 
@@ -58,7 +58,7 @@ class NaviAssistant(ctk.CTk):
         x = self.winfo_x() + event.x - self.drag_x
         y = self.winfo_y() + event.y - self.drag_y
         self.geometry(f"+{x}+{y}")
-    
+
     def start_wake_word_detection(self):
         """Start the wake word detection in a background thread."""
         try:
@@ -68,18 +68,18 @@ class NaviAssistant(ctk.CTk):
                 print("⚠️ PICOVOICE_ACCESS_KEY not found in environment.")
                 print("Wake word detection disabled. Set the key in your .env file.")
                 return
-            
+
             # Create and start the wake word detector
             self.wake_word_detector = WakeWordDetector(access_key)
             success = self.wake_word_detector.start()
-            
+
             if not success:
                 self.wake_word_detector = None
-                
+
         except Exception as e:
             print(f"❌ Failed to initialize wake word detection: {e}")
             self.wake_word_detector = None
-    
+
     def check_wake_word_queue(self):
         """Periodically check if wake word was detected and trigger expand."""
         if self.wake_word_detector is not None:
@@ -88,7 +88,7 @@ class NaviAssistant(ctk.CTk):
                 self.expand()
                 self.voice_input()
 
-        
+
         # Check again in 100ms (10 times per second)
         self.after(100, self.check_wake_word_queue)
 
@@ -100,31 +100,27 @@ class NaviAssistant(ctk.CTk):
             corner_radius=32,
             border_width=0
         )
-        self.collapsed_frame.pack(fill="both", expand=True, padx=0, pady=0)
+        self.collapsed_frame.pack(fill="both", expand=True)
 
-        button_content = ctk.CTkFrame(
-            self.collapsed_frame,
-            fg_color="transparent"
-        )
-        button_content.pack(fill="both", expand=True, padx=20, pady=10)
-
+        # Centered text label directly inside the frame
         text_label = ctk.CTkLabel(
-            button_content,
+            self.collapsed_frame,
             text="ASK NAVI",
             font=("Arial", 15, "bold"),
-            text_color="white"
+            text_color="white",
+            anchor="center"
         )
-        text_label.pack()
+        text_label.place(relx=0.5, rely=0.5, anchor="center")  # <— perfect centering
 
         # Configure appearance with cross-platform compatibility
         self.collapsed_frame.configure(fg_color="#7C3AED")
-        
+
         # Apply platform-specific transparency
         if platform.system() == "Windows":
             # Windows supports transparentcolor
             self.attributes("-transparentcolor", self.cget("fg_color"))
             self.configure(bg="#000000")
-        
+
         # Alpha transparency works on both macOS and Windows
         self.attributes("-alpha", 0.96)
 
@@ -139,7 +135,7 @@ class NaviAssistant(ctk.CTk):
         self.collapsed_frame.bind("<Leave>", on_leave)
 
         # Make entire frame clickable
-        for widget in (self.collapsed_frame, button_content, text_label):
+        for widget in (self.collapsed_frame, text_label):
             widget.bind("<Button-1>", lambda e: self.expand())
 
     def expand(self):
