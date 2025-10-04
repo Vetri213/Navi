@@ -373,7 +373,7 @@ class NaviAssistant(ctk.CTk):
             self.yes_btn.configure(state="normal")
             self.no_btn.configure(state="normal")
             # Speak asynchronously (no UI delay)
-            threading.Thread(target=speak_with_eleven, args=(current,), daemon=True).start()
+            threading.Thread(target=speak_with_eleven, args=(current+" "+follow_up,), daemon=True).start()
         else:
             self.update_output(
                 "🎉 All steps completed!\n\nGreat job! You can now close this window or ask for more help.",
@@ -418,11 +418,11 @@ Task:
 
         clarification_text = f"Clarification for Step {self.current_step + 1}\n\n"
         clarification_text += clarification
-        clarification_text += "\n\nTry again — did that help?"
-
+        clarification_text += "\n\nDid that help?"
+        print(clarification)
         self.update_output(clarification_text, "#374151")
         # Speak asynchronously (no UI delay)
-        threading.Thread(target=speak_with_eleven, args=(clarification), daemon=True).start()
+        threading.Thread(target=speak_with_eleven, args=(clarification+"\nDid that help?",), daemon=True).start()
         self.yes_btn.configure(state="normal")
         self.no_btn.configure(state="normal")
 
