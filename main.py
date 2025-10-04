@@ -365,18 +365,34 @@ class NaviAssistant(ctk.CTk):
         self.submit_btn.configure(state="normal", text="Get Help")
 
     def display_step(self):
-        """Display current step."""
+        """Display current step with context-aware follow-up question."""
         if self.current_step < len(self.steps):
+            current = self.steps[self.current_step]
+
+            # --- Context-aware follow-up selection ---
+            text_lower = current.lower()
+            if any(kw in text_lower for kw in ["see", "look", "find", "locate", "visible", "icon", "button"]):
+                follow_up = "Do you see it?"
+            elif any(kw in text_lower for kw in ["click", "open", "press", "select", "choose"]):
+                follow_up = "Did that work?"
+            elif any(kw in text_lower for kw in ["type", "enter", "fill", "write"]):
+                follow_up = "Did you finish typing that?"
+            else:
+                follow_up = "Did that work?"
+
+            # --- Build display text ---
             step_text = f"Step {self.current_step + 1} of {len(self.steps)}\n\n"
-            step_text += self.steps[self.current_step]
-            step_text += "\n\nDid that work?"
+            step_text += current
+            step_text += f"\n\n{follow_up}"
 
             self.update_output(step_text, "#374151")
             self.yes_btn.configure(state="normal")
             self.no_btn.configure(state="normal")
         else:
             self.update_output(
-                "🎉 All steps completed!\n\nGreat job! You can now close this window or ask for more help.", "#10b981")
+                "🎉 All steps completed!\n\nGreat job! You can now close this window or ask for more help.",
+                "#10b981"
+            )
             self.yes_btn.configure(state="disabled")
             self.no_btn.configure(state="disabled")
 
@@ -426,7 +442,7 @@ Task:
         """Update output text area."""
         self.output_text.configure(state="normal", text_color=color)
         self.output_text.delete("1.0", "end")
-        self.output_text.insert("1.0", text)
+        self.output_text.insert("1.0", text.replace("**",""))
         self.output_text.configure(state="disabled")
 
 
