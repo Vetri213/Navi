@@ -2,6 +2,7 @@ from core.gemini_handler import query_gemini, parse_steps
 from core.voice_handler import record_audio, transcribe_audio_with_eleven, speak_with_eleven, stop_speech
 from core.screenshot_handler import take_screenshot
 from core.wake_word_handler import WakeWordDetector
+from core.embedded_animation import EmbeddedAnimationController
 import customtkinter as ctk
 import os
 import platform
@@ -30,6 +31,10 @@ class NaviAssistant(ctk.CTk):
 
         self.bind("<Button-1>", self.start_drag)
         self.bind("<B1-Motion>", self.on_drag)
+        
+        # Animation will be created when UI expands
+        self.animation = None
+        self.animation_widget = None
         
         # Initialize wake word detection
         self.wake_word_detector = None
@@ -85,6 +90,8 @@ class NaviAssistant(ctk.CTk):
         if self.wake_word_detector is not None:
             if self.wake_word_detector.check_for_wake_word():
                 print("🎯 Activating assistant from wake word...")
+                if self.animation:
+                    self.animation.set_listening()
                 self.expand()
                 self.voice_input()
 
@@ -161,6 +168,12 @@ class NaviAssistant(ctk.CTk):
             return
 
         self.is_expanded = False
+        
+        # Stop animation
+        if self.animation:
+            self.animation.stop()
+            self.animation = None
+            self.animation_widget = None
 
         self.expanded_frame.destroy()
 
@@ -211,6 +224,23 @@ class NaviAssistant(ctk.CTk):
             text_color="#374151"
         )
         title_label.pack(side="left", padx=10)
+
+        # --- Gradient Wave Animation (embedded) ---
+        try:
+            self.animation = EmbeddedAnimationController(
+                self.expanded_frame, 
+                width=380,  # Slightly less than window width for padding
+                height=80
+            )
+            self.animation_widget = self.animation.get_widget()
+            self.animation_widget.pack(padx=20, pady=(10, 0))
+            self.animation.start()
+            self.animation.set_idle()
+            print("✨ Embedded gradient animation enabled")
+        except Exception as e:
+            print(f"⚠️ Could not create animation: {e}")
+            self.animation = None
+            self.animation_widget = None
 
         # --- Main content container ---
         content = ctk.CTkFrame(
@@ -439,14 +469,22 @@ Task:
     def voice_input(self):
         """Capture voice and process as text command."""
         try:
+            # Set animation to listening state
+            if self.animation:
+                self.animation.set_listening()
+            
             self.update_output("🎙️ Listening...", "#667eea")
             self.update()
 
             audio_data = record_audio(duration=5)  # adjust time if needed
             text = transcribe_audio_with_eleven(audio_data)
 
+            # Return to idle after listening
+            if self.animation:
+                self.animation.set_idle()
+
             if text:
-                self.update_output(f"You said: “{text}”", "#374151")
+                self.update_output(f"You said: \"{text}\"", "#374151")
                 self.input_entry.delete(0, "end")
                 self.input_entry.insert(0, text)
                 self.process_command()
@@ -454,4 +492,16 @@ Task:
                 self.update_output("❌ Couldn't recognize speech.", "#ef4444")
 
         except Exception as e:
+            if self.animation:
+                self.animation.set_idle()
             self.update_output(f"Error recording: {e}", "#ef4444")
+    
+    def destroy(self):
+        """Cleanup when closing the application."""
+        # Stop the animation process
+        if hasattr(self, 'animation') and self.animation:
+            print("🧹 Cleaning up animation...")
+            self.animation.stop()
+        
+        # Call parent destroy
+        super().destroy()
