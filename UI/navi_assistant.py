@@ -225,15 +225,16 @@ class NaviAssistant(ctk.CTk):
         )
         input_frame.pack(fill="x", pady=(0, 12))
 
-        # Black input box
+        # Input box with better background color
         self.input_entry = ctk.CTkEntry(
             input_frame,
             placeholder_text="What do you need help with?",
             height=44,
             corner_radius=12,
             border_width=0,
-            fg_color="#1f2937",
-            text_color="white",
+            fg_color="#e5e7eb",
+            text_color="black",  # Black text color
+            placeholder_text_color="#9ca3af",  # Light grey placeholder text
             font=("Arial", 14)
         )
         self.input_entry.pack(side="left", fill="x", expand=True, padx=(0, 8))
@@ -303,8 +304,8 @@ class NaviAssistant(ctk.CTk):
             text="Yes, Next Step",
             height=44,
             corner_radius=12,
-            fg_color="#10b981",
-            hover_color="#059669",
+            fg_color="#9ca3af",  # Grey when disabled
+            hover_color="#9ca3af",  # Grey when disabled
             font=("Arial", 14, "bold"),
             command=self.handle_yes,
             state="disabled"
@@ -316,13 +317,39 @@ class NaviAssistant(ctk.CTk):
             text="No, Clarify",
             height=44,
             corner_radius=12,
-            fg_color="#ef4444",
-            hover_color="#dc2626",
+            fg_color="#9ca3af",  # Grey when disabled
+            hover_color="#9ca3af",  # Grey when disabled
             font=("Arial", 14, "bold"),
             command=self.handle_no,
             state="disabled"
         )
         self.no_btn.pack(side="right", fill="x", expand=True, padx=(6, 0))
+
+    def enable_buttons(self):
+        """Enable buttons with proper colors."""
+        self.yes_btn.configure(
+            state="normal",
+            fg_color="#10b981",  # Green
+            hover_color="#059669"
+        )
+        self.no_btn.configure(
+            state="normal",
+            fg_color="#ef4444",  # Red
+            hover_color="#dc2626"
+        )
+
+    def disable_buttons(self):
+        """Disable buttons with grey colors."""
+        self.yes_btn.configure(
+            state="disabled",
+            fg_color="#9ca3af",  # Grey
+            hover_color="#9ca3af"
+        )
+        self.no_btn.configure(
+            state="disabled",
+            fg_color="#9ca3af",  # Grey
+            hover_color="#9ca3af"
+        )
 
     def process_command(self):
         """Process user command."""
@@ -333,8 +360,7 @@ class NaviAssistant(ctk.CTk):
             return
 
         self.submit_btn.configure(state="disabled", text="Processing...")
-        self.yes_btn.configure(state="disabled")
-        self.no_btn.configure(state="disabled")
+        self.disable_buttons()
         self.update_output("📸 Taking screenshot and analyzing...", "#667eea")
         self.update()
 
@@ -378,8 +404,7 @@ class NaviAssistant(ctk.CTk):
 
             self.update_output(step_text, "#374151")
 
-            self.yes_btn.configure(state="normal")
-            self.no_btn.configure(state="normal")
+            self.enable_buttons()
             # Speak asynchronously (no UI delay)
             threading.Thread(
                 target=speak_with_eleven,
@@ -398,8 +423,7 @@ class NaviAssistant(ctk.CTk):
                 kwargs={"on_finished": self.voice_input},
                 daemon=True
             ).start()
-            self.yes_btn.configure(state="disabled")
-            self.no_btn.configure(state="disabled")
+            self.disable_buttons()
 
     def handle_yes(self):
         """Handle Yes button click."""
@@ -413,8 +437,7 @@ class NaviAssistant(ctk.CTk):
         if self.current_step >= len(self.steps):
             return
 
-        self.yes_btn.configure(state="disabled")
-        self.no_btn.configure(state="disabled")
+        self.disable_buttons()
         self.update_output("🔍 Let me explain that better...", "#667eea")
         self.update()
 
@@ -444,8 +467,7 @@ Task:
         self.update_output(clarification_text, "#374151")
         # Speak asynchronously (no UI delay)
         threading.Thread(target=speak_with_eleven, args=(clarification+"\nDid that help?",), daemon=True).start()
-        self.yes_btn.configure(state="normal")
-        self.no_btn.configure(state="normal")
+        self.enable_buttons()
 
     def update_output(self, text, color="#374151"):
         """Update output text area."""
