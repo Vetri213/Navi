@@ -9,7 +9,8 @@ import customtkinter as ctk
 import os
 import platform
 import threading
-from core.screen_annotator import ScreenAnnotator
+from core.pyqt_screen_annotator import get_annotator
+from core.enhanced_gemini_handler import query_gemini_with_annotations, parse_annotation_instructions
 
 
 
@@ -27,6 +28,11 @@ class NaviAssistant(ctk.CTk):
         self.steps = []
         self.current_step = 0
         self.last_screenshot = None
+        
+        # Initialize screen annotation system
+        self.annotator = get_annotator()
+        self.annotator.start()
+        self.annotated_steps = []  # Store steps with annotation data
 
         self.collapsed_size = (180, 56)
         self.expanded_size = (420, 600)
@@ -376,15 +382,111 @@ class NaviAssistant(ctk.CTk):
 
         self.last_screenshot = screenshot
 
-        data = query_gemini(user_text, screenshot)
-        steps = data["steps"]  # Each element has both instruction + area_hint
+        # Use enhanced Gemini handler with annotations
+        try:
+            response_data = query_gemini_with_annotations(user_text, screenshot)
+            self.annotated_steps = parse_annotation_instructions(response_data)
+            
+            # Extract just the instruction text for backward compatibility
+            self.steps = [step["instruction"] for step in self.annotated_steps]
+            self.current_step = 0
 
-        self.steps = parse_steps(steps)
-        self.current_step = 0
+            self.display_step_with_annotations()
 
-        self.display_step()
+        except Exception as e:
+            print(f"Error with enhanced Gemini: {e}")
+            # Fallback to original method
+            data = query_gemini(user_text, screenshot)
+            steps = data["steps"] if isinstance(data, dict) else data
+            self.steps = parse_steps(steps)
+            self.current_step = 0
+            self.display_step()
 
         self.submit_btn.configure(state="normal", text="Get Help")
+
+    def display_step_with_annotations(self):
+        """Display current step with visual annotations on screen."""
+        if self.current_step < len(self.annotated_steps):
+            step_data = self.annotated_steps[self.current_step]
+            current = step_data["instruction"]
+            
+            # Context-aware follow-up selection
+            text_lower = current.lower()
+            if any(kw in text_lower for kw in ["see", "look", "find", "locate", "visible", "icon", "button"]):
+                follow_up = "Do you see it?"
+            elif any(kw in text_lower for kw in ["click", "open", "press", "select", "choose"]):
+                follow_up = "Did that work?"
+            elif any(kw in text_lower for kw in ["type", "enter", "fill", "write"]):
+                follow_up = "Did you finish typing that?"
+            else:
+                follow_up = "Did that work?"
+
+            # Build display text
+            step_text = f"Step {self.current_step + 1} of {len(self.annotated_steps)}\n\n"
+            step_text += current
+            step_text += f"\n\n{follow_up}"
+
+            self.update_output(step_text, "#374151")
+
+            # Show visual annotation on screen
+            self.show_step_annotation(step_data)
+
+            self.enable_buttons()
+            
+            # Speak asynchronously
+            threading.Thread(
+                target=speak_with_eleven,
+                args=(current + " " + follow_up,),
+                kwargs={"on_finished": self.after_speech_response},
+                daemon=True
+            ).start()
+        else:
+            self.update_output(
+                "🎉 All steps completed!\n\nGreat job! You can now close this window or ask for more help.",
+                "#10b981"
+            )
+            threading.Thread(
+                target=speak_with_eleven,
+                args=("All steps are completed! Great job! You can now close this window or ask for more help.",),
+                kwargs={"on_finished": self.voice_input},
+                daemon=True
+            ).start()
+            self.disable_buttons()
+
+    def show_step_annotation(self, step_data):
+        """Show visual annotation for the current step."""
+        try:
+            annotation = step_data.get("annotation", {})
+            if not annotation:
+                return
+            
+            annotation_type = annotation.get("type", "rectangle")
+            coordinates = annotation.get("coordinates", {})
+            color = annotation.get("color", "#ff0000")
+            text = annotation.get("text", "")
+            
+            if annotation_type == "rectangle":
+                x = coordinates.get("x", 0)
+                y = coordinates.get("y", 0)
+                width = coordinates.get("width", 100)
+                height = coordinates.get("height", 100)
+                self.annotator.highlight_rectangle(x, y, width, height, color, text, 5.0)
+                
+            elif annotation_type == "circle":
+                center_x = coordinates.get("center_x", 0)
+                center_y = coordinates.get("center_y", 0)
+                radius = coordinates.get("radius", 50)
+                self.annotator.highlight_circle(center_x, center_y, radius, color, text, 5.0)
+                
+            elif annotation_type == "arrow":
+                from_x = coordinates.get("from_x", 0)
+                from_y = coordinates.get("from_y", 0)
+                to_x = coordinates.get("to_x", 100)
+                to_y = coordinates.get("to_y", 100)
+                self.annotator.point_arrow(from_x, from_y, to_x, to_y, color, text, 5.0)
+                
+        except Exception as e:
+            print(f"Error showing annotation: {e}")
 
     def display_step(self):
         """Display current step with context-aware follow-up question."""
@@ -443,8 +545,15 @@ class NaviAssistant(ctk.CTk):
     def handle_yes(self):
         """Handle Yes button click."""
         stop_speech()
+        # Clear current annotation
+        self.annotator.clear_all()
         self.current_step += 1
-        self.display_step()
+        
+        # Use annotation display if we have annotated steps
+        if hasattr(self, 'annotated_steps') and self.annotated_steps:
+            self.display_step_with_annotations()
+        else:
+            self.display_step()
 
     def handle_no(self):
         """Handle No button click."""
@@ -452,6 +561,8 @@ class NaviAssistant(ctk.CTk):
         if self.current_step >= len(self.steps):
             return
 
+        # Clear current annotation
+        self.annotator.clear_all()
         self.disable_buttons()
         self.update_output("🔍 Let me explain that better...", "#667eea")
         self.update()
@@ -565,3 +676,13 @@ class NaviAssistant(ctk.CTk):
 
         except Exception as e:
             self.update_output(f"Error recording: {e}", "#ef4444")
+    
+    def cleanup(self):
+        """Clean up resources when closing."""
+        if hasattr(self, 'annotator'):
+            self.annotator.clear_all()
+    
+    def destroy(self):
+        """Override destroy to clean up annotations."""
+        self.cleanup()
+        super().destroy()
