@@ -4,7 +4,7 @@ This guide will help you obtain and configure all the API keys needed for Navi t
 
 ---
 
-##  Required API Keys
+## 🔑 Required API Keys
 
 Navi requires three API keys:
 
@@ -14,7 +14,7 @@ Navi requires three API keys:
 
 ---
 
-##  Google Gemini API Key
+## 🤖 Google Gemini API Key
 
 ### What is it for?
 Gemini analyzes screenshots and understands your requests to provide context-aware guidance.
@@ -40,7 +40,7 @@ Gemini analyzes screenshots and understands your requests to provide context-awa
 - **1,500 requests per day**
 - **1 million tokens per month**
 
-Perfect for personal use! 
+Perfect for personal use! 🎉
 
 ### Troubleshooting
 - **Error: "API key not valid"**
@@ -55,7 +55,7 @@ Perfect for personal use!
 
 ---
 
-##  ElevenLabs API Key
+## 🎙️ ElevenLabs API Key
 
 ### What is it for?
 ElevenLabs provides:
@@ -111,7 +111,7 @@ Your API key must have **speech-to-text** permission:
 
 ---
 
-##  Picovoice Access Key
+## 🎤 Picovoice Access Key
 
 ### What is it for?
 Picovoice Porcupine enables wake word detection, so Navi responds when you say "Hey Navi".
@@ -155,7 +155,7 @@ Picovoice Porcupine enables wake word detection, so Navi responds when you say "
 
 ---
 
-##  Complete .env File Example
+## 📝 Complete .env File Example
 
 Your `.env` file should look like this:
 
@@ -174,7 +174,7 @@ PICOVOICE_ACCESS_KEY=0/jfRzAai0MbCufJv8sQmVt00I+klJFjKAhA/X4S8+FT5RncEEmgQQ==
 
 ---
 
-##  Security Best Practices
+## 🔒 Security Best Practices
 
 ### Protecting Your API Keys
 
@@ -203,15 +203,15 @@ PICOVOICE_ACCESS_KEY=0/jfRzAai0MbCufJv8sQmVt00I+klJFjKAhA/X4S8+FT5RncEEmgQQ==
 
 ---
 
-##  Cost Considerations
+## Cost Considerations
 
 ### Free Tier Summary
 
 | Service | Free Tier | Sufficient for Navi? |
 |---------|-----------|---------------------|
-| **Gemini** | 1M tokens/month |  Yes, for personal use |
-| **ElevenLabs** | 10K chars/month |  Moderate use only |
-| **Picovoice** | Unlimited local |  Yes, completely free |
+| **Gemini** | 1M tokens/month | ✅ Yes, for personal use |
+| **ElevenLabs** | 10K chars/month | ⚠️ Moderate use only |
+| **Picovoice** | Unlimited local | ✅ Yes, completely free |
 
 ### When to Upgrade
 
@@ -229,7 +229,7 @@ Consider paid plans if:
 
 ---
 
-##  Verification Checklist
+## ✅ Verification Checklist
 
 After setting up your API keys:
 
@@ -245,7 +245,7 @@ After setting up your API keys:
 
 ---
 
-##  Testing Your Setup
+## 🧪 Testing Your Setup
 
 Run this test to verify all keys are working:
 
@@ -255,11 +255,11 @@ python main.py
 
 Expected output:
 ```
- Loading .env from: /path/to/.env
- ELEVEN_API_KEY loaded: Yes
- Found wake word model
- Wake word detection started successfully!
- Wake word detection active. Say 'Hey Navi' to activate...
+📁 Loading .env from: /path/to/.env
+🔑 ELEVEN_API_KEY loaded: Yes
+✅ Found wake word model
+✅ Wake word detection started successfully!
+🎧 Wake word detection active. Say 'Hey Navi' to activate...
 ```
 
 Then say **"Hey Navi"** and ask a question to test all components.
@@ -268,7 +268,6 @@ Then say **"Hey Navi"** and ask a question to test all components.
 
 ##  Still Having Issues?
 
-- Check the [Troubleshooting Guide](Troubleshooting.md)
 - Review [Installation Guide](Installation-Guide.md)
 - Open an issue on [GitHub](https://github.com/Vetri213/Navi/issues)
 

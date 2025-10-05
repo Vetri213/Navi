@@ -1,4 +1,4 @@
-#  Navi - Your Personal Computer Navigation Assistant
+# 🧭 Navi - Your Personal Computer Navigation Assistant
 
 <div align="center">
 
@@ -14,7 +14,7 @@
 
 ---
 
-##  Overview
+## 🌟 Overview
 
 **Navi** is an intelligent, voice-activated computer navigation assistant designed specifically to help elderly users and those less familiar with technology navigate their computers effortlessly. Named after the helpful companion from *The Legend of Zelda*, Navi guides users through complex computer tasks with simple, step-by-step voice instructions.
 
@@ -66,7 +66,7 @@ Many elderly individuals struggle with basic computer tasks that younger generat
 
 ---
 
-##  Demo
+## Demo
 
 ### Typical User Journey
 
@@ -101,12 +101,11 @@ Many elderly individuals struggle with basic computer tasks that younger generat
 
 ---
 
-##  Installation
+## Installation
 
 ### Prerequisites
 
 - **Python 3.13+**
-- **macOS** (Windows support coming soon)
 - **Microphone** for voice input
 - **Internet connection** for AI services
 
@@ -201,7 +200,7 @@ Once Navi is running:
 
 ---
 
-##  Technology Stack
+## 🛠️ Technology Stack
 
 ### Core Technologies
 
@@ -224,23 +223,23 @@ Once Navi is running:
 
 ---
 
-##  Project Structure
+## 🏗️ Project Structure
 
 ```
 Navi/
- main.py                          # Application entry point
- core/
-    gemini_handler.py           # Google Gemini AI integration
-    voice_handler.py            # Speech recognition & synthesis
-    screenshot_handler.py       # Screen capture functionality
-    wake_word_handler.py        # "Hey Navi" detection
- UI/
-    navi_assistant.py           # User interface components
- Hey-Navi_en_mac_v3_0_0/         # Wake word model
-    Hey-Navi_en_mac_v3_0_0.ppn
- requirements.txt                 # Python dependencies
- .env                            # API keys (not in repo)
- README.md                       # This file
+├── main.py                          # Application entry point
+├── core/
+│   ├── gemini_handler.py           # Google Gemini AI integration
+│   ├── voice_handler.py            # Speech recognition & synthesis
+│   ├── screenshot_handler.py       # Screen capture functionality
+│   └── wake_word_handler.py        # "Hey Navi" detection
+├── UI/
+│   └── navi_assistant.py           # User interface components
+├── Hey-Navi_en_mac_v3_0_0/         # Wake word model
+│   └── Hey-Navi_en_mac_v3_0_0.ppn
+├── requirements.txt                 # Python dependencies
+├── .env                            # API keys (not in repo)
+└── README.md                       # This file
 ```
 
 ---
@@ -300,13 +299,9 @@ We welcome contributions! Whether you're fixing bugs, adding features, or improv
 
 ---
 
-##  License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
----
-
-##  Acknowledgments
+## 🙏 Acknowledgments
 
 - **Picovoice** for wake word detection technology
 - **ElevenLabs** for natural voice synthesis
@@ -315,18 +310,10 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ---
 
-##  Contact & Support
-
-- **GitHub Issues:** [Report bugs or request features](https://github.com/Vetri213/Navi/issues)
-- **Email:** support@naviassistant.com
-- **Documentation:** [Full documentation](https://github.com/Vetri213/Navi/wiki)
-
----
-
 <div align="center">
 
-**Made with  for everyone who deserves technology that works for them**
+**Made with ❤️ for everyone who deserves technology that works for them**
 
- Star this repo if Navi helped you or someone you love! 
+
 
 </div>
