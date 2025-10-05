@@ -1,7 +1,8 @@
-from core.gemini_handler import query_gemini, parse_steps
+from core.gemini_handler import query_gemini, parse_steps, query_gemini_for_steps_with_boxes
 from core.voice_handler import record_audio, transcribe_audio_with_eleven, speak_with_eleven, stop_speech
 from core.screenshot_handler import take_screenshot
 from core.wake_word_handler import WakeWordDetector
+from core.annotation_handler import AnnotationOverlay
 import customtkinter as ctk
 import os
 import platform
@@ -18,7 +19,7 @@ class NaviAssistant(ctk.CTk):
         self.configure(fg_color="#1a1a2e")
 
         self.is_expanded = False
-        self.steps = []
+        self.steps_data = []  # Use a more descriptive name
         self.current_step = 0
         self.last_screenshot = None
 
@@ -37,6 +38,9 @@ class NaviAssistant(ctk.CTk):
         
         # Start checking for wake word events
         self.check_wake_word_queue()
+        
+        # Initialize annotation overlay
+        self.annotation_overlay = AnnotationOverlay(self)
 
     def position_window(self, size):
         """Position window in bottom-right corner using given size tuple (w, h)."""
@@ -157,6 +161,9 @@ class NaviAssistant(ctk.CTk):
 
     def collapse(self):
         """Collapse to floating button."""
+        # Hide the overlay when collapsing
+        self.annotation_overlay.hide()
+        
         if not self.is_expanded:
             return
 
@@ -334,27 +341,34 @@ class NaviAssistant(ctk.CTk):
         screenshot = take_screenshot(self)
         if not screenshot:
             self.update_output("❌ Could not take screenshot", "#ef4444")
-            self.submit_btn.configure(state="normal", text="Get Help")
+            self.submit_btn.configure(state="normal", text="Ask Navi")
             return
 
         self.last_screenshot = screenshot
 
-        response = query_gemini(user_text, screenshot)
-
-        self.steps = parse_steps(response)
+        # Use the NEW Gemini function that returns steps with bounding boxes
+        self.steps_data = query_gemini_for_steps_with_boxes(user_text, screenshot)
         self.current_step = 0
 
         self.display_step()
 
-        self.submit_btn.configure(state="normal", text="Get Help")
+        self.submit_btn.configure(state="normal", text="Ask Navi")
 
     def display_step(self):
-        """Display current step with context-aware follow-up question."""
-        if self.current_step < len(self.steps):
-            current = self.steps[self.current_step]
+        """Display current step and highlight the corresponding UI element."""
+        self.annotation_overlay.hide()  # Hide previous highlight
 
-            # --- Context-aware follow-up selection ---
-            text_lower = current.lower()
+        if self.current_step < len(self.steps_data):
+            step_info = self.steps_data[self.current_step]
+            current_text = step_info.get("text", "An error occurred.")
+            box = step_info.get("box")
+
+            # Show the highlight if coordinates exist
+            if box and all(isinstance(coord, (int, float)) for coord in box) and len(box) == 4:
+                self.annotation_overlay.show_highlight(*box)
+
+            # Context-aware follow-up selection
+            text_lower = current_text.lower()
             if any(kw in text_lower for kw in ["see", "look", "find", "locate", "visible", "icon", "button"]):
                 follow_up = "Do you see it?"
             elif any(kw in text_lower for kw in ["click", "open", "press", "select", "choose"]):
@@ -364,9 +378,9 @@ class NaviAssistant(ctk.CTk):
             else:
                 follow_up = "Did that work?"
 
-            # --- Build display text ---
-            step_text = f"Step {self.current_step + 1} of {len(self.steps)}\n\n"
-            step_text += current
+            # Build display text
+            step_text = f"Step {self.current_step + 1} of {len(self.steps_data)}\n\n"
+            step_text += current_text
             step_text += f"\n\n{follow_up}"
 
             self.update_output(step_text, "#374151")
@@ -374,7 +388,7 @@ class NaviAssistant(ctk.CTk):
             self.yes_btn.configure(state="normal")
             self.no_btn.configure(state="normal")
             # Speak asynchronously (no UI delay)
-            threading.Thread(target=speak_with_eleven, args=(current+" "+follow_up,), daemon=True).start()
+            threading.Thread(target=speak_with_eleven, args=(current_text+" "+follow_up,), daemon=True).start()
         else:
             self.update_output(
                 "🎉 All steps completed!\n\nGreat job! You can now close this window or ask for more help.",
@@ -385,14 +399,16 @@ class NaviAssistant(ctk.CTk):
 
     def handle_yes(self):
         """Handle Yes button click."""
+        self.annotation_overlay.hide()
         stop_speech()
         self.current_step += 1
         self.display_step()
 
     def handle_no(self):
         """Handle No button click."""
+        self.annotation_overlay.hide()
         stop_speech()
-        if self.current_step >= len(self.steps):
+        if self.current_step >= len(self.steps_data):
             return
 
         self.yes_btn.configure(state="disabled")
@@ -406,7 +422,7 @@ class NaviAssistant(ctk.CTk):
             return
 
         clarification_prompt = f"""You gave this step to the user:
-{self.steps[self.current_step]}
+{self.steps_data[self.current_step]['text']}
 
 The user clicked "No" - they couldn't complete it or are confused.
 
