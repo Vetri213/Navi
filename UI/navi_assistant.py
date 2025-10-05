@@ -3,11 +3,15 @@ from PIL import ImageTk, Image
 from core.gemini_handler import query_gemini, parse_steps
 from core.voice_handler import record_audio, transcribe_audio_with_eleven, speak_with_eleven, stop_speech
 from core.screenshot_handler import take_screenshot
+#annotate_screenshot
 from core.wake_word_handler import WakeWordDetector
 import customtkinter as ctk
 import os
 import platform
 import threading
+from core.screen_annotator import ScreenAnnotator
+
+
 
 
 class NaviAssistant(ctk.CTk):
@@ -372,9 +376,10 @@ class NaviAssistant(ctk.CTk):
 
         self.last_screenshot = screenshot
 
-        response = query_gemini(user_text, screenshot)
+        data = query_gemini(user_text, screenshot)
+        steps = data["steps"]  # Each element has both instruction + area_hint
 
-        self.steps = parse_steps(response)
+        self.steps = parse_steps(steps)
         self.current_step = 0
 
         self.display_step()
@@ -383,11 +388,21 @@ class NaviAssistant(ctk.CTk):
 
     def display_step(self):
         """Display current step with context-aware follow-up question."""
+
         if self.current_step < len(self.steps):
             current = self.steps[self.current_step]
+            instruction = current["instruction"]
+            area_hint = current["area_hint"]
+            print(area_hint)
+            # Create a global annotator instance
+            self.annotator = getattr(self, "annotator", ScreenAnnotator())
+
+            # Instead of annotate_screenshot(...)
+            self.annotator.highlight_region(area_hint, duration=2.5)
+
 
             # --- Context-aware follow-up selection ---
-            text_lower = current.lower()
+            text_lower = instruction.lower()
             if any(kw in text_lower for kw in ["see", "look", "find", "locate", "visible", "icon", "button"]):
                 follow_up = "Do you see it?"
             elif any(kw in text_lower for kw in ["click", "open", "press", "select", "choose"]):
@@ -399,7 +414,7 @@ class NaviAssistant(ctk.CTk):
 
             # --- Build display text ---
             step_text = f"Step {self.current_step + 1} of {len(self.steps)}\n\n"
-            step_text += current
+            step_text += instruction
             step_text += f"\n\n{follow_up}"
 
             self.update_output(step_text, "#374151")
@@ -408,7 +423,7 @@ class NaviAssistant(ctk.CTk):
             # Speak asynchronously (no UI delay)
             threading.Thread(
                 target=speak_with_eleven,
-                args=(current + " " + follow_up,),
+                args=(instruction + " " + follow_up,),
                 kwargs={"on_finished": self.after_speech_response},
                 daemon=True
             ).start()
@@ -447,34 +462,73 @@ class NaviAssistant(ctk.CTk):
             return
 
         clarification_prompt = f"""You gave this step to the user:
-{self.steps[self.current_step]}
+    {self.steps[self.current_step]['instruction']}
 
-The user clicked "No" - they couldn't complete it or are confused.
+    The user clicked "No" — they couldn't complete it or are confused.
 
-Task:
-- Re-explain this step much more clearly
-- Use extremely simple language
-- Mention exactly what to look for (colors, text, icons, position)
-- Break into smaller sub-steps if needed
-"""
+    Task:
+    - Re-explain this step much more clearly
+    - Use extremely simple language
+    - Mention exactly what to look for (colors, text, icons, position)
+    - Break into smaller sub-steps if needed
+    Return structured JSON with 'steps' and 'area_hint' for each.
+    """
 
-        clarification = query_gemini(clarification_prompt, screenshot)
+        data = query_gemini(clarification_prompt, screenshot)
 
+        # Make sure Gemini returned valid structured data
+        clarification_steps = data.get("steps", [])
+        if not clarification_steps:
+            self.update_output("❌ Gemini did not return clarification steps.", "#ef4444")
+            return
+
+        # Use the first clarification instruction (you could show multiple)
+        step = clarification_steps[0]
+        instruction = step.get("instruction", "")
+        area_hint = step.get("area_hint", "center")
+
+        # Annotate screenshot for visual help
+        # annotated_img = annotate_screenshot(self.last_screenshot, area_hint)
+
+        # Update UI with the clarification
         clarification_text = f"Clarification for Step {self.current_step + 1}\n\n"
-        clarification_text += clarification
+        clarification_text += instruction
         clarification_text += "\n\nDid that help?"
 
         self.update_output(clarification_text, "#374151")
-        # Speak asynchronously (no UI delay)
-        threading.Thread(target=speak_with_eleven, args=(clarification+"\nDid that help?",), daemon=True).start()
+
+        # Display annotated screenshot below
+        # from customtkinter import CTkImage
+        # from PIL import Image
+        # img = Image.open(annotated_img)
+        # self.annotated_photo = CTkImage(img, size=(300, 170))
+        # self.image_label.configure(image=self.annotated_photo)
+
+        # Speak asynchronously
+        threading.Thread(
+            target=speak_with_eleven,
+            args=(instruction + " Did that help?",),
+            daemon=True
+        ).start()
+
+        # Reactivate buttons
         self.enable_buttons()
 
     def update_output(self, text, color="#374151"):
-        """Update output text area."""
-        self.output_text.configure(state="normal", text_color=color)
-        self.output_text.delete("1.0", "end")
-        self.output_text.insert("1.0", text.replace("**",""))
-        self.output_text.configure(state="disabled")
+        """Thread-safe update for output text area."""
+
+        def _update():
+            if not hasattr(self, "output_text") or not self.winfo_exists():
+                return  # widget destroyed or window closed
+            try:
+                self.output_text.configure(state="normal", text_color=color)
+                self.output_text.delete("1.0", "end")
+                self.output_text.insert("1.0", text.replace("**", ""))
+                self.output_text.configure(state="disabled")
+            except Exception as e:
+                print(f"⚠️ GUI update failed: {e}")
+
+        self.after(0, _update)
 
     def after_speech_response(self):
         """Called after Navi finishes speaking — listens for yes/no."""
@@ -490,6 +544,9 @@ Task:
 
     def voice_input(self):
         """Capture voice and process as text command."""
+        if not self.winfo_exists():
+            return  # Window closed before callback executed
+
         stop_speech()
         try:
             self.update_output("🎙️ Listening...", "#667eea")
