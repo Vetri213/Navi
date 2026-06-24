@@ -390,12 +390,16 @@ class NaviAssistant(ctk.CTk):
             text_lower = current.lower()
             if any(kw in text_lower for kw in ["see", "look", "find", "locate", "visible", "icon", "button"]):
                 follow_up = "Do you see it?"
+                follow_up_tamil = "Nī ataip pārttāyā?"
             elif any(kw in text_lower for kw in ["click", "open", "press", "select", "choose"]):
                 follow_up = "Did that work?"
+                follow_up_tamil = "Atu vēlai ceytatā?"
             elif any(kw in text_lower for kw in ["type", "enter", "fill", "write"]):
                 follow_up = "Did you finish typing that?"
+                follow_up_tamil ="Nīṅka ṭaip paṇṇi muṭicciṭṭīṅkaḷā?"
             else:
                 follow_up = "Did that work?"
+                follow_up_tamil = "Atu vēlai ceytatā?"
 
             # --- Build display text ---
             step_text = f"Step {self.current_step + 1} of {len(self.steps)}\n\n"
@@ -408,7 +412,7 @@ class NaviAssistant(ctk.CTk):
             # Speak asynchronously (no UI delay)
             threading.Thread(
                 target=speak_with_eleven,
-                args=(current + " " + follow_up,),
+                args=(current + " " + follow_up_tamil,),
                 kwargs={"on_finished": self.after_speech_response},
                 daemon=True
             ).start()

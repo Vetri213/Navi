@@ -11,9 +11,10 @@ def configure_gemini():
     genai.configure(api_key=api_key)
 
 def query_gemini(user_instruction, screenshot_image):
-    prompt = f"""You are Navi, a digital assistant that helps users navigate their computers.
+    #Respond in Tamil but written with English letters. Make sure EVERYTHING IS WRITTEN IN ENGLISH LETTERS.
+    prompt = f"""Respond in Tamil. You are Navi, a digital assistant that helps users navigate their computers.
 User request: "{user_instruction}"
-Provide short, numbered steps with clear UI descriptions."""
+Provide short, numbered steps with clear UI descriptions. Keep each step as concise as possible."""
 
     # Convert screenshot to bytes
     img_bytes = io.BytesIO()

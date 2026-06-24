@@ -70,7 +70,7 @@ from core.voice_handler import record_audio, transcribe_audio_with_eleven  # to 
 pygame.mixer.init()
 current_audio_channel = None
 
-def speak_with_eleven(text, voice_id="JBFqnCBsd6RMkjVDRZzb", on_finished=None):
+def speak_with_eleven(text, voice_id="gCr8TeSJgJaeaIoV4RWH", on_finished=None):
     """Speak text via ElevenLabs and trigger callback after speech ends."""
     global current_audio_channel
 
@@ -78,7 +78,7 @@ def speak_with_eleven(text, voice_id="JBFqnCBsd6RMkjVDRZzb", on_finished=None):
     if not ELEVEN_API_KEY:
         print("❌ ELEVEN_API_KEY missing in environment.")
         return
-
+    # "[Strong Tamil Accent] [Slowly] [Instructive]"+
     # Clean text
     clean_text = "".join(ch for ch in text if ch.isalnum() or ch.isspace() or ch in ".,!?")
 
@@ -88,9 +88,11 @@ def speak_with_eleven(text, voice_id="JBFqnCBsd6RMkjVDRZzb", on_finished=None):
         "Accept": "audio/mpeg",
         "Content-Type": "application/json"
     }
+    #model_id="eleven_multilingual_v2"
     payload = {
         "text": clean_text,
-        "model_id": "eleven_turbo_v2",
+        "model_id" : "eleven_multilingual_v2",
+        # "model_id": "eleven_turbo_v2",
         "voice_settings": {"stability": 0.6, "similarity_boost": 0.8}
     }
 
